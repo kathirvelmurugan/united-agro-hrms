@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UA Attendance – Line by Line Code Reference</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; margin: 0; padding: 26px 30px; font-size: 11px; }
+  h1 { color: #1d4ed8; font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #64748b; margin: 0 0 16px; font-size: 12px; }
+  h2 { color: #0f172a; font-size: 14px; border-bottom: 2px solid #2563eb; padding-bottom: 4px; margin: 24px 0 8px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  th { background: #2563eb; color: #fff; text-align: left; padding: 5px 8px; font-size: 10px; }
+  td { border: 1px solid #e2e8f0; padding: 4px 8px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .ln { width: 40px; color: #94a3b8; text-align: right; font-family: Consolas, monospace; font-size: 10px; }
+  code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px; padding: 0 3px; font-family: Consolas, monospace; font-size: 10px; color: #b91c1c; }
+  .code-cell { font-family: Consolas, monospace; font-size: 10px; color: #0f172a; word-break: break-word; }
+  .filehead { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; border-radius: 4px; padding: 6px 10px; font-weight: 700; font-size: 12px; margin: 18px 0 6px; }
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<h1>UA Attendance &ndash; Line by Line Code Reference</h1>
+<p class="sub">Every line of the code, with its use &ndash; tabular format. Open <code>REFERENCE.pdf</code> from this file.</p>
+
+<!-- ============ app.py ============ -->
+<div class="filehead">FILE: C:\inetpub\wwwroot\ua\app.py</div>
+
+<h2>Lines 1&ndash;19 &mdash; Imports &amp; Flask app config</h2>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">1</td><td class="code-cell">import os</td><td>Access environment variables and file paths.</td></tr>
+<tr><td class="ln">2</td><td class="code-cell">import json</td><td>Read/write the users.json file.</td></tr>
+<tr><td class="ln">3</td><td class="code-cell">import threading</td><td>Run the background sync thread.</td></tr>
+<tr><td class="ln">4</td><td class="code-cell">import time</td><td>Pause 3s between sync cycles.</td></tr>
+<tr><td class="ln">5</td><td class="code-cell">from datetime import date, datetime</td><td>Get today's date and current time stamps.</td></tr>
+<tr><td class="ln">6</td><td class="code-cell">import pyodbc</td><td>Connect to SQL Server.</td></tr>
+<tr><td class="ln">7</td><td class="code-cell">from flask import Flask, render_template_string, jsonify, request, redirect, session, url_for, send_from_directory</td><td>Flask web framework tools (templates, JSON, sessions).</td></tr>
+<tr><td class="ln">8</td><td class="code-cell">from flask_cors import CORS</td><td>Allow cross-origin requests.</td></tr>
+<tr><td class="ln">9</td><td class="code-cell">from functools import wraps</td><td>Helper for login decorators.</td></tr>
+<tr><td class="ln">10</td><td class="code-cell">from werkzeug.security import generate_password_hash, check_password_hash</td><td>Password hashing helpers (imported, currently unused in logic).</td></tr>
+<tr><td class="ln">12</td><td class="code-cell">app = Flask(__name__)</td><td>Create the Flask application object.</td></tr>
+<tr><td class="ln">13</td><td class="code-cell">CORS(app)</td><td>Enable CORS on all routes.</td></tr>
+<tr><td class="ln">14</td><td class="code-cell">app.secret_key = os.environ.get("SECRET_KEY", "ua-attendance-fixed-secret-key-2026")</td><td>Secret used to sign session cookies.</td></tr>
+<tr><td class="ln">15</td><td class="code-cell">app.config.update(</td><td>Start of app config block.</td></tr>
+<tr><td class="ln">16</td><td class="code-cell">&nbsp;&nbsp;SESSION_COOKIE_HTTPONLY=True,</td><td>Session cookie not readable by JavaScript (safer).</td></tr>
+<tr><td class="ln">17</td><td class="code-cell">&nbsp;&nbsp;SESSION_COOKIE_SAMESITE="Lax",</td><td>Cookie sent only on same-site navigation.</td></tr>
+<tr><td class="ln">18</td><td class="code-cell">&nbsp;&nbsp;PERMANENT_SESSION_LIFETIME=480,</td><td>Session lifetime 480 minutes (8 hours).</td></tr>
+<tr><td class="ln">19</td><td class="code-cell">)</td><td>End of config block.</td></tr>
+</table>
+
+<h2>Lines 21&ndash;45 &mdash; Paths, DB config, locations</h2>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">21</td><td class="code-cell">BASE_DIR = os.path.dirname(os.path.abspath(__file__))</td><td>Folder where app.py lives (C:\inetpub\wwwroot\ua).</td></tr>
+<tr><td class="ln">22</td><td class="code-cell">USERS_FILE = os.path.join(BASE_DIR, "users.json")</td><td>Full path to the users file.</td></tr>
+<tr><td class="ln">24</td><td class="code-cell">DB_CONFIG = ( ... )</td><td>SQL Server connection string (db eTimetracklite1).</td></tr>
+<tr><td class="ln">33</td><td class="code-cell">LOG_TABLES = ["DeviceLogs_8_2026", ...]</td><td>Monthly punch-log tables to scan for today.</td></tr>
+<tr><td class="ln">35</td><td class="code-cell">LIVE_CACHES = {}</td><td>In-memory live attendance per device.</td></tr>
+<tr><td class="ln">36</td><td class="code-cell">USER_CACHE = None</td><td>In-memory copy of users.json.</td></tr>
+<tr><td class="ln">37</td><td class="code-cell">USERS_LOCK = threading.Lock()</td><td>Prevents two threads writing users.json at once.</td></tr>
+<tr><td class="ln">39</td><td class="code-cell">LOCATIONS = {</td><td>Start of device list.</td></tr>
+<tr><td class="ln">40</td><td class="code-cell">&nbsp;&nbsp;21: {"name": "UA_Neikarapatti", "location": "Neikarapatti"},</td><td>Device 21 = Neikarapatti.</td></tr>
+<tr><td class="ln">41</td><td class="code-cell">&nbsp;&nbsp;23: {"name": "UA_Theevattipatti", "location": "Theevattipatti"},</td><td>Device 23 = Theevattipatti.</td></tr>
+<tr><td class="ln">42</td><td class="code-cell">&nbsp;&nbsp;24: {"name": "UA_Sipcot", "location": "Sipcot"},</td><td>Device 24 = Sipcot (default display).</td></tr>
+<tr><td class="ln">43</td><td class="code-cell">&nbsp;&nbsp;25: {"name": "UA_head_lab", "location": "Salem Head"},</td><td>Device 25 = Salem Head lab.</td></tr>
+<tr><td class="ln">44</td><td class="code-cell">&nbsp;&nbsp;42: {"name": "UA_NAMAKKAL", "location": "Namakkal"},</td><td>Device 42 = Namakkal.</td></tr>
+<tr><td class="ln">45</td><td class="code-cell">}</td><td>End of device list. <b>Add/remove devices here.</b></td></tr>
+</table>
+
+<h2>Lines 47&ndash;86 &mdash; Users file helpers &amp; auth decorators</h2>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">47</td><td class="code-cell">def load_users():</td><td>Define function to load users.</td></tr>
+<tr><td class="ln">49</td><td class="code-cell">&nbsp;&nbsp;with USERS_LOCK:</td><td>Lock while reading the file.</td></tr>
+<tr><td class="ln">50</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;if os.path.exists(USERS_FILE):</td><td>If users.json exists...</td></tr>
+<tr><td class="ln">51</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with open(USERS_FILE, "r") as f:</td><td>Open it for reading.</td></tr>
+<tr><td class="ln">52</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;USER_CACHE = json.load(f)</td><td>Load JSON into cache.</td></tr>
+<tr><td class="ln">54</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;else: USER_CACHE = {}</td><td>If no file, use empty dict.</td></tr>
+<tr><td class="ln">55</td><td class="code-cell">&nbsp;&nbsp;return USER_CACHE</td><td>Return the users.</td></tr>
+<tr><td class="ln">57</td><td class="code-cell">def save_users(users):</td><td>Define function to save users.</td></tr>
+<tr><td class="ln">59</td><td class="code-cell">&nbsp;&nbsp;with open(USERS_FILE, "w") as f:</td><td>Open file for writing.</td></tr>
+<tr><td class="ln">60</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;json.dump(users, f, indent=2)</td><td>Write JSON (pretty, 2-space indent).</td></tr>
+<tr><td class="ln">62</td><td class="code-cell">&nbsp;&nbsp;USER_CACHE = dict(users)</td><td>Refresh in-memory cache.</td></tr>
+<tr><td class="ln">64</td><td class="code-cell">load_users()</td><td>Load users once at startup.</td></tr>
+<tr><td class="ln">66</td><td class="code-cell">def login_required(f):</td><td>Decorator: requires a session user.</td></tr>
+<tr><td class="ln">69</td><td class="code-cell">&nbsp;&nbsp;if "user" not in session:</td><td>If not logged in...</td></tr>
+<tr><td class="ln">70</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;return redirect(url_for("login"))</td><td>...redirect to login page.</td></tr>
+<tr><td class="ln">74</td><td class="code-cell">def role_required(*roles):</td><td>Decorator: require a specific role.</td></tr>
+<tr><td class="ln">82</td><td class="code-cell">&nbsp;&nbsp;if user_data.get("role") not in roles:</td><td>If role not allowed...</td></tr>
+<tr><td class="ln">83</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;return redirect(url_for("login"))</td><td>...redirect to login.</td></tr>
+</table>
+
+<h2 class="pagebreak">Lines 88&ndash;225 &mdash; Core sync engine (runs every 3s)</h2>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">88</td><td class="code-cell">def database_sync_worker():</td><td>Define the background worker.</td></tr>
+<tr><td class="ln">89</td><td class="code-cell">&nbsp;&nbsp;while True:</td><td>Loop forever.</td></tr>
+<tr><td class="ln">91</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;today = date.today()</td><td>Get today's date.</td></tr>
+<tr><td class="ln">92</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;today_str = today.strftime("%Y-%m-%d")</td><td>Format as YYYY-MM-DD.</td></tr>
+<tr><td class="ln">93</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;device_ids = list(LOCATIONS.keys())</td><td>List of all configured devices.</td></tr>
+<tr><td class="ln">95</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;conn = pyodbc.connect(DB_CONFIG)</td><td>Open DB connection.</td></tr>
+<tr><td class="ln">96</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;cursor = conn.cursor()</td><td>Create DB cursor.</td></tr>
+<tr><td class="ln">98</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;cursor.execute(""" SELECT EmployeeCode, EmployeeName, DeviceId FROM Employees ... """)</td><td>Load all employees.</td></tr>
+<tr><td class="ln">103</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;all_emps = cursor.fetchall()</td><td>Fetch results.</td></tr>
+<tr><td class="ln">105</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;emp_map = {}</td><td>Build global name map.</td></tr>
+<tr><td class="ln">106</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;for r in all_emps:</td><td>Loop each employee row.</td></tr>
+<tr><td class="ln">107</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code = str(r[0]).strip()</td><td>Employee code.</td></tr>
+<tr><td class="ln">108</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name = str(r[1]).strip() ...</td><td>Name or fallback "Employee {code}".</td></tr>
+<tr><td class="ln">110</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;emp_map[code] = {"name": name, "device_id": dev_id}</td><td>Store code &rarr; name/device.</td></tr>
+<tr><td class="ln">112</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;device_emps = {}</td><td>Map device &rarr; enrolled employees.</td></tr>
+<tr><td class="ln">115</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;cursor.execute(f""" SELECT du.DeviceId, e.EmployeeCode, e.EmployeeName FROM DeviceUsers du LEFT JOIN Employees e ... """)</td><td>Which employees are enrolled per device.</td></tr>
+<tr><td class="ln">121</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;for r in cursor.fetchall():</td><td>Loop enrolled rows.</td></tr>
+<tr><td class="ln">126</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;device_emps.setdefault(dev, {})[code] = name</td><td>Store enrollment under device.</td></tr>
+<tr><td class="ln">130</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;logs_by_device = {}</td><td>Today's punches grouped by device.</td></tr>
+<tr><td class="ln">137</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;for table in LOG_TABLES:</td><td>Try each log table.</td></tr>
+<tr><td class="ln">143</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cursor.execute(f""" SELECT UserId, LogDate, C1, DeviceId FROM {table} WHERE DeviceId IN (...) AND CONVERT(date, LogDate) = ? """)</td><td>Query today's punches from this table.</td></tr>
+<tr><td class="ln">147</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break</td><td>Stop after first table that works.</td></tr>
+<tr><td class="ln">151</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;for row in all_logs:</td><td>Loop each punch row.</td></tr>
+<tr><td class="ln">152</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uid = str(row[0]).strip()</td><td>Employee/User id.</td></tr>
+<tr><td class="ln">156</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;logs_by_device[dev_id].append(...)</td><td>Add punch to that device.</td></tr>
+<tr><td class="ln">161</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;for dev_id in device_ids:</td><td>Process each device.</td></tr>
+<tr><td class="ln">166</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enrolled = list(device_emps.get(dev_id, {}).keys())</td><td>Employees enrolled on device.</td></tr>
+<tr><td class="ln">167</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assigned = [...]</td><td>Employees whose Employees.DeviceId = this device.</td></tr>
+<tr><td class="ln">168</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;relevant = list(dict.fromkeys(enrolled + assigned + list(punch_users)))</td><td>Final list = enrolled + assigned + anyone who punched.</td></tr>
+<tr><td class="ln">172</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;employees = {}</td><td>Build per-device employee dict.</td></tr>
+<tr><td class="ln">173</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for uid in relevant:</td><td>For each employee...</td></tr>
+<tr><td class="ln">174</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if uid in device_emps.get(dev_id, {}):</td><td>If enrolled &rarr; use enrolled name.</td></tr>
+<tr><td class="ln">176</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif uid in emp_map:</td><td>Else if in global employees...</td></tr>
+<tr><td class="ln">179</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else: name = f"Employee {uid}"</td><td>Else show "Employee {id}".</td></tr>
+<tr><td class="ln">180</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;employees[uid] = {"name": name, "punches": [], "status": "Absent", "last_punch": "--:--:--"}</td><td>Create employee record, default Absent.</td></tr>
+<tr><td class="ln">186</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for uid, emp in employees.items():</td><td>Compute status for each.</td></tr>
+<tr><td class="ln">187</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if emp["punches"]:</td><td>If employee has punches today...</td></tr>
+<tr><td class="ln">191</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;emp["status"] = "Present" if last["dir"] == "in" or len(emp["punches"]) % 2 == 1 else "Absent"</td><td><b>KEY RULE:</b> Present if last punch is "in" OR punch count is odd.</td></tr>
+<tr><td class="ln">199</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;present = sum(...)</td><td>Count Present.</td></tr>
+<tr><td class="ln">200</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;absent = sum(...)</td><td>Count Absent.</td></tr>
+<tr><td class="ln">206</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LIVE_CACHES[dev_id] = {...}</td><td>Save result to cache.</td></tr>
+<tr><td class="ln">211</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"device_status": {...}</td><td>Device name/location/last_punch/status.</td></tr>
+<tr><td class="ln">215</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"status": "Online" if last_punch else "Offline",</td><td>Online if any punch today, else Offline.</td></tr>
+<tr><td class="ln">217</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"last_updated": datetime.now().strftime("%I:%M:%S %p")</td><td>Time of last cache update.</td></tr>
+<tr><td class="ln">220</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;conn.close()</td><td>Close DB connection.</td></tr>
+<tr><td class="ln">222</td><td class="code-cell">&nbsp;&nbsp;except Exception as e:</td><td>Catch any error.</td></tr>
+<tr><td class="ln">223</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;print(f"Sync error: {e}")</td><td>Print the error to log.</td></tr>
+<tr><td class="ln">225</td><td class="code-cell">&nbsp;&nbsp;time.sleep(3)</td><td><b>Wait 3 seconds, then repeat.</b></td></tr>
+</table>
+
+<h2 class="pagebreak">Lines 596&ndash;705 &mdash; Routes (API used by React)</h2>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">596</td><td class="code-cell">FRONTEND_DIR = os.path.join(BASE_DIR, "dist")</td><td>Where the built React app lives.</td></tr>
+<tr><td class="ln">598</td><td class="code-cell">@app.route("/", defaults={"path": ""})</td><td>Route for site root.</td></tr>
+<tr><td class="ln">599</td><td class="code-cell">@app.route("/&lt;path:path&gt;")</td><td>Route for any path under /.</td></tr>
+<tr><td class="ln">600</td><td class="code-cell">def serve_frontend(path):</td><td>Serve the SPA.</td></tr>
+<tr><td class="ln">602</td><td class="code-cell">&nbsp;&nbsp;if path and os.path.isfile(full):</td><td>If file exists in dist...</td></tr>
+<tr><td class="ln">603</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;return send_from_directory(FRONTEND_DIR, path)</td><td>...send it.</td></tr>
+<tr><td class="ln">604</td><td class="code-cell">&nbsp;&nbsp;return send_from_directory(FRONTEND_DIR, "index.html")</td><td>Else fall back to index.html (SPA routing).</td></tr>
+<tr><td class="ln">683</td><td class="code-cell">@app.route("/api/login", methods=["POST"])</td><td>Login API endpoint.</td></tr>
+<tr><td class="ln">685</td><td class="code-cell">&nbsp;&nbsp;data = request.get_json(force=True, silent=True) or {}</td><td>Read JSON body.</td></tr>
+<tr><td class="ln">686</td><td class="code-cell">&nbsp;&nbsp;username = (data.get("username") or "").strip()</td><td>Read username.</td></tr>
+<tr><td class="ln">687</td><td class="code-cell">&nbsp;&nbsp;password = (data.get("password") or "").strip()</td><td>Read password.</td></tr>
+<tr><td class="ln">689</td><td class="code-cell">&nbsp;&nbsp;user_data = users.get(username)</td><td>Look up user.</td></tr>
+<tr><td class="ln">690</td><td class="code-cell">&nbsp;&nbsp;if user_data and user_data.get("password") == password:</td><td>If credentials match...</td></tr>
+<tr><td class="ln">691</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;return jsonify({...})</td><td>...return success + role + device_id.</td></tr>
+<tr><td class="ln">698</td><td class="code-cell">&nbsp;&nbsp;return jsonify({"success": False, ...}), 401</td><td>Else return 401 error.</td></tr>
+<tr><td class="ln">700</td><td class="code-cell">@app.route("/api/locations")</td><td>Locations API.</td></tr>
+<tr><td class="ln">702</td><td class="code-cell">&nbsp;&nbsp;return jsonify([{"device_id": did, ...} for did, loc in LOCATIONS.items()])</td><td>Return all devices as JSON list.</td></tr>
+<tr><td class="ln">655</td><td class="code-cell">@app.route("/api/live/&lt;int:device_id&gt;")</td><td>Live data for one device.</td></tr>
+<tr><td class="ln">657</td><td class="code-cell">&nbsp;&nbsp;data = LIVE_CACHES.get(device_id)</td><td>Read from cache.</td></tr>
+<tr><td class="ln">658</td><td class="code-cell">&nbsp;&nbsp;if not data:</td><td>If not cached...</td></tr>
+<tr><td class="ln">659</td><td class="code-cell">&nbsp;&nbsp;&nbsp;&nbsp;return jsonify({"present":0,...})</td><td>...return zeros.</td></tr>
+<tr><td class="ln">663</td><td class="code-cell">&nbsp;&nbsp;api_status = "IN" if db_status == "Present" else "OUT"</td><td>Convert Present &rarr; IN, Absent &rarr; OUT.</td></tr>
+<tr><td class="ln">673</td><td class="code-cell">&nbsp;&nbsp;return jsonify({...})</td><td>Return present/absent/employees/deviceStatus.</td></tr>
+</table>
+
+<h2>Lines 715&ndash;873 &mdash; User APIs &amp; background start</h2>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">707</td><td class="code-cell">API_KEY = "admin123"</td><td>Static key for user-management endpoints.</td></tr>
+<tr><td class="ln">715</td><td class="code-cell">@app.route("/api/users", methods=["GET", "POST"])</td><td>List/Create users.</td></tr>
+<tr><td class="ln">722</td><td class="code-cell">&nbsp;&nbsp;if request.method == "GET":</td><td>GET &rarr; list users (excluding superadmin).</td></tr>
+<tr><td class="ln">735</td><td class="code-cell">&nbsp;&nbsp;if request.method == "POST":</td><td>POST &rarr; create user.</td></tr>
+<tr><td class="ln">743</td><td class="code-cell">&nbsp;&nbsp;if not username or not password or not label:</td><td>Validation.</td></tr>
+<tr><td class="ln">745</td><td class="code-cell">&nbsp;&nbsp;if username in users:</td><td>Duplicate check.</td></tr>
+<tr><td class="ln">748</td><td class="code-cell">&nbsp;&nbsp;users[username] = {...}</td><td>Add new user.</td></tr>
+<tr><td class="ln">755</td><td class="code-cell">&nbsp;&nbsp;save_users(users)</td><td>Save to users.json.</td></tr>
+<tr><td class="ln">758</td><td class="code-cell">@app.route("/api/users/&lt;username&gt;", methods=["DELETE"])</td><td>Delete a user.</td></tr>
+<tr><td class="ln">764</td><td class="code-cell">&nbsp;&nbsp;if username not in users or users[username].get("role") == "superadmin":</td><td>Cannot delete superadmin.</td></tr>
+<tr><td class="ln">766</td><td class="code-cell">&nbsp;&nbsp;del users[username]</td><td>Delete user.</td></tr>
+<tr><td class="ln">865</td><td class="code-cell">_THREAD_STARTED = False</td><td>Flag so thread starts only once.</td></tr>
+<tr><td class="ln">870</td><td class="code-cell">&nbsp;&nbsp;t = threading.Thread(target=database_sync_worker, daemon=True)</td><td>Create background sync thread.</td></tr>
+<tr><td class="ln">871</td><td class="code-cell">&nbsp;&nbsp;t.start()</td><td>Start it (runs forever).</td></tr>
+</table>
+
+<!-- ============ App.tsx ============ -->
+<h1 class="pagebreak">FRONTEND SOURCE FILES</h1>
+
+<div class="filehead">FILE: src\App.tsx &ndash; Session &amp; routing</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">1</td><td class="code-cell">import { useState } from 'react';</td><td>React state hook.</td></tr>
+<tr><td class="ln">2</td><td class="code-cell">import LoginPage from './components/LoginPage';</td><td>Login screen component.</td></tr>
+<tr><td class="ln">3</td><td class="code-cell">import Dashboard from './components/Dashboard';</td><td>Main dashboard component.</td></tr>
+<tr><td class="ln">4</td><td class="code-cell">import AdminPage from './components/AdminPage';</td><td>Admin panel component.</td></tr>
+<tr><td class="ln">5</td><td class="code-cell">import SidebarLayout from './components/SidebarLayout';</td><td>App shell component.</td></tr>
+<tr><td class="ln">7</td><td class="code-cell">type Page = 'login' | 'admin';</td><td>Which page is visible.</td></tr>
+<tr><td class="ln">9</td><td class="code-cell">const STORAGE_KEY = 'ua_session_user';</td><td>localStorage key for session persistence.</td></tr>
+<tr><td class="ln">11</td><td class="code-cell">function loadUser() {</td><td>Read saved user from localStorage.</td></tr>
+<tr><td class="ln">12</td><td class="code-cell">&nbsp;&nbsp;try { const raw = localStorage.getItem(STORAGE_KEY);</td><td>Get stored JSON.</td></tr>
+<tr><td class="ln">13</td><td class="code-cell">&nbsp;&nbsp;if (!raw) return null;</td><td>Nothing stored &rarr; no user.</td></tr>
+<tr><td class="ln">14</td><td class="code-cell">&nbsp;&nbsp;const u = JSON.parse(raw);</td><td>Parse it.</td></tr>
+<tr><td class="ln">15</td><td class="code-cell">&nbsp;&nbsp;return u && u.username ? u : null;</td><td>Valid if it has a username.</td></tr>
+<tr><td class="ln">17</td><td class="code-cell">&nbsp;&nbsp;catch { return null; }</td><td>On error, no user.</td></tr>
+<tr><td class="ln">20</td><td class="code-cell">const [page, setPage] = useState&lt;Page&gt;('login');</td><td>Current page state.</td></tr>
+<tr><td class="ln">21</td><td class="code-cell">const [user, setUser] = useState&lt;...&gt;(loadUser);</td><td>User state, initialized from localStorage.</td></tr>
+<tr><td class="ln">24</td><td class="code-cell">function handleLogin(username, role, label, deviceId) {</td><td>Called after successful login.</td></tr>
+<tr><td class="ln">25</td><td class="code-cell">&nbsp;&nbsp;const next = { username, role, label, deviceId };</td><td>Build user object.</td></tr>
+<tr><td class="ln">26</td><td class="code-cell">&nbsp;&nbsp;setUser(next);</td><td>Update state.</td></tr>
+<tr><td class="ln">27</td><td class="code-cell">&nbsp;&nbsp;localStorage.setItem(STORAGE_KEY, JSON.stringify(next));</td><td><b>Save session &rarr; survives refresh.</b></td></tr>
+<tr><td class="ln">31</td><td class="code-cell">function handleLogout() {</td><td>Logout handler.</td></tr>
+<tr><td class="ln">32</td><td class="code-cell">&nbsp;&nbsp;setUser(null);</td><td>Clear state.</td></tr>
+<tr><td class="ln">33</td><td class="code-cell">&nbsp;&nbsp;localStorage.removeItem(STORAGE_KEY);</td><td>Delete saved session.</td></tr>
+<tr><td class="ln">36</td><td class="code-cell">if (!user) return &lt;LoginPage onLogin={handleLogin} /&gt;;</td><td>No user &rarr; show login.</td></tr>
+<tr><td class="ln">39</td><td class="code-cell">if (page === 'admin') return &lt;AdminPage ... /&gt;;</td><td>Admin page when requested.</td></tr>
+<tr><td class="ln">49</td><td class="code-cell">return (&lt;SidebarLayout ...&gt;&lt;Dashboard .../&gt;&lt;/SidebarLayout&gt;)</td><td>Default: shell with dashboard.</td></tr>
+</table>
+
+<div class="filehead">FILE: src\data\mockData.ts &ndash; Config values</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">1</td><td class="code-cell">export const API_URL = import.meta.env.BASE_URL.replace(/\/+$/, '');</td><td>API base = /UA (same origin).</td></tr>
+<tr><td class="ln">2</td><td class="code-cell">export const DEVICE_ID = 24;</td><td>Default device if manager has none.</td></tr>
+</table>
+
+<div class="filehead">FILE: src\types.ts &ndash; Type definitions</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">1</td><td class="code-cell">export interface PunchRecord {...}</td><td>Single punch (time + direction).</td></tr>
+<tr><td class="ln">6</td><td class="code-cell">export interface Employee {...}</td><td>Employee: id, name, status, punches.</td></tr>
+<tr><td class="ln">16</td><td class="code-cell">export interface LiveData {...}</td><td>Live API response shape.</td></tr>
+<tr><td class="ln">26</td><td class="code-cell">export type DetailedStatus = ...</td><td>Possible detail statuses.</td></tr>
+</table>
+
+<div class="filehead">FILE: src\data\attendanceUtils.ts &ndash; Shift rules</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">26</td><td class="code-cell">const startMins = 8 * 60 + 30;</td><td>Shift start 8:30 AM.</td></tr>
+<tr><td class="ln">27</td><td class="code-cell">const lateMins = 9 * 60 + 30;</td><td>Late threshold 9:30 AM.</td></tr>
+<tr><td class="ln">28</td><td class="code-cell">const overtimeMins = 18 * 60;</td><td>Overtime threshold 6:00 PM.</td></tr>
+<tr><td class="ln">19</td><td class="code-cell">export function getDetailedStatus(emp)</td><td>Return 'working'/'late'/'absent'/etc.</td></tr>
+<tr><td class="ln">55</td><td class="code-cell">export function getStatusConfig(status)</td><td>Chip color/label per status.</td></tr>
+<tr><td class="ln">68</td><td class="code-cell">export function calcHoursToday(emp)</td><td>Hours worked today.</td></tr>
+</table>
+
+<div class="filehead pagebreak">FILE: src\components\Dashboard.tsx &ndash; Live view</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">1</td><td class="code-cell">import { useEffect, useState, useMemo } from 'react';</td><td>React hooks.</td></tr>
+<tr><td class="ln">2</td><td class="code-cell">import EmployeeCard from './EmployeeCard';</td><td>Employee card component.</td></tr>
+<tr><td class="ln">3</td><td class="code-cell">import { API_URL, DEVICE_ID } from '../data/mockData';</td><td>Config values.</td></tr>
+<tr><td class="ln">5</td><td class="code-cell">import { getDetailedStatus } from '../data/attendanceUtils';</td><td>Filtering by detail status.</td></tr>
+<tr><td class="ln">21</td><td class="code-cell">const FILTER_OPTIONS = [...]</td><td>Filter dropdown items.</td></tr>
+<tr><td class="ln">31</td><td class="code-cell">export default function Dashboard({role, deviceId, statusFilter, onFilterChange})</td><td>Component entry.</td></tr>
+<tr><td class="ln">32</td><td class="code-cell">const [data, setData] = useState&lt;LiveData | null&gt;(null);</td><td>Live data state.</td></tr>
+<tr><td class="ln">38</td><td class="code-cell">const canSwitchLocation = role === 'superadmin' || role === 'admin';</td><td>Only admin/superadmin can switch devices.</td></tr>
+<tr><td class="ln">40</td><td class="code-cell">async function fetchLocations()</td><td>Load /api/locations.</td></tr>
+<tr><td class="ln">50</td><td class="code-cell">async function fetchData()</td><td>Load /api/live/&lt;device&gt;.</td></tr>
+<tr><td class="ln">51</td><td class="code-cell">&nbsp;&nbsp;const dev = activeDevice ?? DEVICE_ID;</td><td>Use chosen device or default 24.</td></tr>
+<tr><td class="ln">62</td><td class="code-cell">useEffect(() => { fetchData(); const id = setInterval(fetchData, 2000); ... }, [activeDevice]);</td><td><b>Refresh every 2 seconds.</b></td></tr>
+<tr><td class="ln">68</td><td class="code-cell">const sorted = useMemo(...)</td><td>Sort employees by first punch time.</td></tr>
+<tr><td class="ln">83</td><td class="code-cell">const filtered = useMemo(...)</td><td>Apply status filter.</td></tr>
+<tr><td class="ln">91</td><td class="code-cell">&lt;div className="bg-white border-b ..."&gt;</td><td>Header bar.</td></tr>
+<tr><td class="ln">97</td><td class="code-cell">&lt;h1&gt;{data ? data.deviceName : 'UA Attendance'}&lt;/h1&gt;</td><td>Device name.</td></tr>
+<tr><td class="ln">101</td><td class="code-cell">{canSwitchLocation && ...}</td><td>Location switcher dropdown.</td></tr>
+<tr><td class="ln">133</td><td class="code-cell">&lt;span ...&gt;ONLINE/OFFLINE&lt;/span&gt;</td><td>Device connectivity badge (green/red).</td></tr>
+<tr><td class="ln">141</td><td class="code-cell">{data.present} IN / {data.absent} OUT</td><td>Summary in header.</td></tr>
+<tr><td class="ln">157</td><td class="code-cell">&lt;div className="grid grid-cols-3 ..."&gt; Present/Absent/Total</td><td>Summary cards.</td></tr>
+<tr><td class="ln">200</td><td class="code-cell">grid ... {filtered.map((emp, i) =&gt; &lt;EmployeeCard .../&gt;)}</td><td>Employee cards grid.</td></tr>
+</table>
+
+<div class="filehead">FILE: src\components\EmployeeCard.tsx &ndash; One employee</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">19</td><td class="code-cell">const hasPunch = Boolean(employee.lastPunchRaw);</td><td>Did this person punch?</td></tr>
+<tr><td class="ln">20</td><td class="code-cell">const [seconds, setSeconds] = useState(0);</td><td>Live duration counter.</td></tr>
+<tr><td class="ln">22</td><td class="code-cell">const detailStatus = useMemo(() =&gt; getDetailedStatus(employee), [employee]);</td><td>Status label for chip.</td></tr>
+<tr><td class="ln">26</td><td class="code-cell">useEffect(...) { tick every 200ms }</td><td>Update IN-duration live.</td></tr>
+<tr><td class="ln">46</td><td class="code-cell">&lt;p&gt;{employee.name}&lt;/p&gt;</td><td>Employee name.</td></tr>
+<tr><td class="ln">47</td><td class="code-cell">status chip</td><td>Working/Late/Absent pill.</td></tr>
+<tr><td class="ln">52</td><td class="code-cell">ID: {employee.id}</td><td>Employee id.</td></tr>
+<tr><td class="ln">56</td><td class="code-cell">In/Last: {employee.lastPunch}</td><td>Punch time.</td></tr>
+<tr><td class="ln">61</td><td class="code-cell">Dur: {formatDuration(seconds)}</td><td>Duration in/out.</td></tr>
+</table>
+
+<div class="filehead pagebreak">FILE: src\components\AdminPage.tsx &ndash; Admin panel</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">55</td><td class="code-cell">const canManageAll = role === 'superadmin' || role === 'admin';</td><td>Can see all devices.</td></tr>
+<tr><td class="ln">60</td><td class="code-cell">async function fetchUsers() { fetch('/api/users?key=admin123') }</td><td>Load user list.</td></tr>
+<tr><td class="ln">68</td><td class="code-cell">async function fetchLocations()</td><td>Load devices.</td></tr>
+<tr><td class="ln">79</td><td class="code-cell">async function fetchLiveSummaries()</td><td>Load live data for all allowed devices.</td></tr>
+<tr><td class="ln">96</td><td class="code-cell">useEffect(..., 5000)</td><td>Refresh summaries every 5s.</td></tr>
+<tr><td class="ln">106</td><td class="code-cell">async function handleCreate(e)</td><td>Create user via POST /api/users.</td></tr>
+<tr><td class="ln">131</td><td class="code-cell">async function handleDelete(username)</td><td>Delete user via DELETE /api/users.</td></tr>
+<tr><td class="ln">190</td><td class="code-cell">&lt;div&gt; All Locations cards</td><td>Per-device live overview.</td></tr>
+<tr><td class="ln">226</td><td class="code-cell">Add User form</td><td>Create manager/admin.</td></tr>
+<tr><td class="ln">274</td><td class="code-cell">Users table + Delete</td><td>Manage users.</td></tr>
+</table>
+
+<div class="filehead">FILE: src\components\LoginPage.tsx &ndash; Login form</div>
+<table>
+<tr><th>Line</th><th>Code</th><th>Its use</th></tr>
+<tr><td class="ln">19</td><td class="code-cell">useEffect(() => { setUsername(''); setPassword(''); }, []);</td><td>Clear fields on mount (no autofill).</td></tr>
+<tr><td class="ln">24</td><td class="code-cell">function handleSubmit(e)</td><td>On form submit.</td></tr>
+<tr><td class="ln">28</td><td class="code-cell">fetch(`${API_URL}/api/login`, {method:'POST', body: JSON.stringify({username, password})})</td><td>Call login API.</td></tr>
+<tr><td class="ln">35</td><td class="code-cell">if (r.ok && d.success) onLogin(d.username, d.role, d.label, d.device_id)</td><td>On success &rarr; enter app.</td></tr>
+<tr><td class="ln">38</td><td class="code-cell">else setError('Invalid username or password')</td><td>Show error.</td></tr>
+</table>
+
+<!-- ============ users.json ============ -->
+<h1 class="pagebreak">users.json &ndash; Account store</h1>
+<table>
+<tr><th>Field</th><th>Example</th><th>Its use</th></tr>
+<tr><td>username (key)</td><td><code>"admin_sipcot"</code></td><td>Login username.</td></tr>
+<tr><td>password</td><td><code>"Admin@sipcot"</code></td><td>Login password (plain text).</td></tr>
+<tr><td>role</td><td><code>"superadmin" / "admin" / "manager"</code></td><td>Permission level.</td></tr>
+<tr><td>label</td><td><code>"Admin - UA_Sipcot"</code></td><td>Display name shown in UI.</td></tr>
+<tr><td>device_id</td><td><code>24</code></td><td>Which device this user manages.</td></tr>
+<tr><td>location</td><td><code>"Sipcot"</code></td><td>Display location.</td></tr>
+</table>
+
+<h2>Quick task lookup</h2>
+<table>
+<tr><th>Task</th><th>File / place</th></tr>
+<tr><td>Add or remove a device</td><td><code>LOCATIONS</code> in app.py (L39-45)</td></tr>
+<tr><td>Change device name/location shown</td><td>app.py LOCATIONS + users.json</td></tr>
+<tr><td>Change shift start / late / overtime</td><td>attendanceUtils.ts L26-28</td></tr>
+<tr><td>Change default device</td><td>mockData.ts DEVICE_ID</td></tr>
+<tr><td>Change auto-refresh speed</td><td>Dashboard.tsx L64 (2000)</td></tr>
+<tr><td>Change login persistence key</td><td>App.tsx STORAGE_KEY</td></tr>
+<tr><td>Add/delete a user</td><td>users.json OR Admin Panel</td></tr>
+</table>
+
+<h2>Deploy steps</h2>
+<table>
+<tr><th>Step</th><th>Action</th></tr>
+<tr><td>Build frontend</td><td><code>npm run build</code> in attendance-dashboard\</td></tr>
+<tr><td>Copy to server</td><td>dist\ &rarr; C:\inetpub\wwwroot\ua\dist\</td></tr>
+<tr><td>Backend change</td><td>edit app.py / users.json directly</td></tr>
+<tr><td>Apply</td><td>recycle IIS DefaultAppPool if needed</td></tr>
+</table>
+
+</body>
+</html>
