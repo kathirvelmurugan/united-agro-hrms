@@ -14,8 +14,9 @@ export interface ShiftWindow {
   generalEnd: string;   // 'HH:MM'
   lunchStart?: string;
   lunchEnd?: string;
+  graceMinutes?: number;
   extraShifts?: { label: string; start: string; end: string }[];
-  employeeShifts?: Record<string, { generalStart: string; generalEnd: string; lunch?: boolean }>;
+  employeeShifts?: Record<string, { generalStart: string; generalEnd: string; lunch?: boolean; graceMinutes?: number }>;
 }
 
 export const BRANCH_SHIFTS: Record<string, ShiftWindow> = {
@@ -49,8 +50,8 @@ export const BRANCH_SHIFTS: Record<string, ShiftWindow> = {
     generalStart: '09:45', generalEnd: '18:00',
     lunchStart: '13:00', lunchEnd: '13:30',
     employeeShifts: {
-      '31': { generalStart: '09:00', generalEnd: '17:30' },
-      '32': { generalStart: '08:00', generalEnd: '19:30' },
+      '31': { generalStart: '09:00', generalEnd: '17:30', graceMinutes: 15 },
+      '32': { generalStart: '08:00', generalEnd: '19:30', graceMinutes: 15 },
     },
   },
   'SS SLP': {
@@ -105,6 +106,7 @@ export function shiftForEmployee(branch: string | undefined, id?: string | null)
         generalStart: emp.generalStart,
         generalEnd: emp.generalEnd,
         ...(emp.lunch === false ? { lunchStart: undefined, lunchEnd: undefined } : {}),
+        ...(emp.graceMinutes != null ? { graceMinutes: emp.graceMinutes } : {}),
       };
     }
   }
@@ -194,14 +196,15 @@ export function lateInfo(e: Statusable): LateInfo {
     ...(shift.extraShifts ?? []).map(s => ({ label: s.label, startSec: shiftSeconds(s.start) })),
   ];
 
+  const grace = (shift.graceMinutes ?? 0) * 60;
   let best: { label: string; delta: number } | null = null;
   for (const c of candidates) {
     let d = first - c.startSec;
     if (Math.abs(d + DAY) < Math.abs(d)) d += DAY;
     if (!best || Math.abs(d) < Math.abs(best.delta)) best = { label: c.label, delta: d };
   }
-  if (!best || best.delta <= 0) return { isLate: false, minutes: 0, shift: best?.label ?? 'General' };
-  return { isLate: true, minutes: Math.round(best.delta / 60), shift: best.label };
+  if (!best || best.delta <= grace) return { isLate: false, minutes: 0, shift: best?.label ?? 'General' };
+  return { isLate: true, minutes: Math.round((best.delta - grace) / 60), shift: best.label };
 }
 
 export function isWorking(e: Statusable): boolean {
