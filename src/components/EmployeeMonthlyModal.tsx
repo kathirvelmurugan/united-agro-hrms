@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { X, CalendarDays, CheckCircle2, AlertTriangle, XCircle, Clock4, Timer, User, Link2, Download } from 'lucide-react';
 import { API_URL } from '../data/mockData';
-import { shiftForEmployee } from '../lib/status';
+import { shiftForEmployee, shiftSeconds } from '../lib/status';
 
 export interface EmployeeRef {
   id: string;
@@ -413,7 +413,12 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
                               )}
                               {d.day_type === 'present' && !d.rule_type && (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600">
-                                  Present {d.lunch ? <span className="text-gray-400">· 30m lunch deducted</span> : null}
+                                  {(() => {
+                                    const lunchMin = shift?.lunchStart && shift?.lunchEnd ? (shiftSeconds(shift.lunchEnd) - shiftSeconds(shift.lunchStart)) / 60 : 0;
+                                    return <>
+                                      Present {d.lunch && lunchMin > 0 ? <span className="text-gray-400">· {lunchMin}m lunch deducted</span> : null}
+                                    </>;
+                                  })()}
                                 </span>
                               )}
                               {d.status === 'absent' && (
