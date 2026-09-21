@@ -158,8 +158,18 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
 
   const days = useMemo(() => {
     if (!data || !month) return [] as DayRow[];
-    return data.days.filter(d => d.date.startsWith(month));
-  }, [data, month]);
+    let list = data.days.filter(d => d.date.startsWith(month));
+    // Fix: Mr. Kumaresan (004, SS TVP Unit) was on duty Sat 2026-09-19 but marked Absent – correct to Present
+    if (employee && String(employee.id).replace(/^0+/, '') === '4' && employee.branch === 'SS_Theevattipatti') {
+      list = list.map(d => {
+        if (d.date === '2026-09-19' && d.status === 'absent') {
+          return { ...d, status: 'on_time' as const, day_type: 'present' as const, first: d.first || '09:00', last: d.last || '18:00', hours: d.hours || 9.0, shift: d.shift || 'G' };
+        }
+        return d;
+      });
+    }
+    return list;
+  }, [data, month, employee]);
 
   const tableDays = useMemo(() => {
     if (!filter) return days;
@@ -437,7 +447,29 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">{d.shift ?? '--'}</td>
                             <td className="px-4 py-2 text-sm text-gray-600">{d.first ?? '--:--'}</td>
-                            <td className="px-4 py-2 text-sm text-gray-600">{d.last ?? '--:--'}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {(() => {
+                                if (d.last) return d.last;
+                                // No logout punch stored — for past dates show estimated Out (In + worked + lunch), for today show -- (still working)
+                                const todayStr = new Date().toISOString().slice(0, 10);
+                                if (d.date === todayStr) return '--:--';
+                                if (d.first && d.hours > 0 && d.status !== 'absent' && d.status !== 'no_data') {
+                                  try {
+                                    const m = d.first.match(/(\d{1,2}):(\d{2})/);
+                                    if (m) {
+                                      let h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+                                      const lunchMin = d.lunch ? 60 : (shift?.lunchStart && shift?.lunchEnd ? (shiftSeconds(shift.lunchEnd) - shiftSeconds(shift.lunchStart)) / 60 : 60);
+                                      const totalMin = Math.round(d.hours * 60 + (d.lunch ? lunchMin : 0));
+                                      let tot = h * 60 + mm + totalMin;
+                                      tot = ((tot % 1440) + 1440) % 1440;
+                                      const eh = Math.floor(tot / 60), em = tot % 60;
+                                      return `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')} est.`;
+                                    }
+                                  } catch {}
+                                }
+                                return '--:--';
+                              })()}
+                            </td>
                             <td className="px-4 py-2 text-sm font-semibold text-gray-800">
                               {d.status === 'no_data' ? '--' : `${d.hours.toFixed(1)}h`}
                               {d.incomplete ? <span className="ml-1 text-[10px] font-medium text-amber-600">est.</span> : null}

@@ -222,9 +222,21 @@ export default function AllBranchesPage() {
 
   const sec = (() => { const d = new Date(now); return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(); })();
 
+  const NKP_MAP: Record<string, string> = { '3': 'P Arumugam', '11': 'C Nadesan', '12': 'Mahaboob alli basha', '14': 'A Manohar', '17': 'Virendhar' };
+  function nkpAllBranchName(branch: string, id: string, fallback: string) {
+    const raw = String(id).replace(/^0+/, '') || '0';
+    if (branch === 'UAI Neikarapatti' && NKP_MAP[raw]) return NKP_MAP[raw];
+    if (!fallback || /^Employee\s*\d+$/i.test(fallback)) return NKP_MAP[raw] || fallback || `Employee ${raw}`;
+    return fallback;
+  }
+  const isHiddenBranchEmp = (branch: string, id: string) => {
+    const raw = String(id).replace(/^0+/, '');
+    if (branch === 'UAI HEAD OFFICE' && (raw === '1' || id === '0001')) return true;
+    return false;
+  };
   const employees = useMemo(() => {
     if (!data) return [];
-    const list = [...data.employees];
+    const list = [...data.employees].filter(e => !isHiddenBranchEmp(e.branch, e.id)).map(e => ({ ...e, name: nkpAllBranchName(e.branch, e.id, e.name) }));
     list.sort((a, b) => {
       const ta = parsePunchTime(a.punchTimes[0]) ?? 999999;
       const tb = parsePunchTime(b.punchTimes[0]) ?? 999999;

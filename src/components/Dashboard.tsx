@@ -103,11 +103,38 @@ export default function Dashboard({ role, deviceId, statusFilter = 'all', onFilt
     } catch { /* ignore */ }
   }
 
+  const NKP_DASH_MAP: Record<string, string> = { '3': 'P Arumugam', '11': 'C Nadesan', '12': 'Mahaboob alli basha', '14': 'A Manohar', '17': 'Virendhar' };
+  function dashNkpName(id: string, fallback: string) {
+    const raw = String(id).replace(/^0+/, '') || '0';
+    if (NKP_DASH_MAP[raw] && (fallback?.startsWith('Employee') || !fallback)) return NKP_DASH_MAP[raw];
+    if (/^Employee\s*\d+$/i.test(fallback || '')) return NKP_DASH_MAP[raw] || fallback;
+    return NKP_DASH_MAP[raw] ? NKP_DASH_MAP[raw] : fallback;
+  }
   async function fetchData() {
     const dev = activeDevice ?? DEVICE_ID;
     try {
       const r = await fetch(`${API_URL}/api/live/${dev}`);
-      if (r.ok) setData(await r.json());
+      if (r.ok) {
+        const d = await r.json();
+        const fixLast = (e: any) => {
+          const lastDir = e.punchDirs?.[e.punchDirs.length - 1];
+          const isStillIn = lastDir === 'IN' || (e.punchTimes?.length === 1 && e.status === 'IN');
+          return { ...e, name: dashNkpName(e.id, e.name), lastPunch: isStillIn ? '' : (e.lastPunch || ''), lastPunchRaw: isStillIn ? '' : (e.lastPunchRaw || '') };
+        };
+        if (dev === 58 && d.employees) {
+          d.employees = d.employees.map(fixLast);
+          // Ensure 5 always present even if absent (no punch today)
+          const existing = new Set(d.employees.map((e: any) => String(e.id).replace(/^0+/, '')));
+          for (const mid of ['14','3','11','17','12']) {
+            if (!existing.has(mid)) {
+              d.employees.push({ id: mid.padStart(4,'0'), name: NKP_DASH_MAP[mid], status: 'OUT', lastPunch: '', lastPunchRaw: '', punchTimes: [], punchDirs: [] });
+            }
+          }
+        } else if (d.employees) {
+          d.employees = d.employees.map(fixLast);
+        }
+        setData(d);
+      }
     } catch { /* ignore */ }
   }
 
@@ -121,9 +148,16 @@ export default function Dashboard({ role, deviceId, statusFilter = 'all', onFilt
     return () => clearInterval(id);
   }, [activeDevice]);
 
+  const isHiddenDashEmp = (branch: string | undefined, id: string) => {
+    const raw = String(id).replace(/^0+/, '');
+    if ((branch === 'UAI HEAD OFFICE' || branch === 'UAI HEAD OFFICE') && (raw === '1' || id === '0001')) return true;
+    // also check data.deviceName for single device mode
+    if (raw === '1' && data?.deviceName === 'UAI HEAD OFFICE' && id === '0001') return true;
+    return false;
+  };
   const sorted = useMemo(() => {
     if (!data) return [];
-    const employees = data.employees;
+    const employees = data.employees.filter(e => !isHiddenDashEmp((e as any).branch || data.deviceName, e.id));
     function punchVal(e: (typeof employees)[0]) {
       if (!e.punchTimes.length) return 999999;
       const m = e.punchTimes[0].match(/(\d{2}):(\d{2}):(\d{2}) (AM|PM)/);

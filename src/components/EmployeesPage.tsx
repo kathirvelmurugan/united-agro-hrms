@@ -37,17 +37,107 @@ export default function EmployeesPage({ title = 'Employees', deviceId = null }: 
       const r = await fetch(url);
       if (r.ok) {
         const d = await r.json();
+        let liveData: AllLiveData;
         if (deviceId) {
-          setData({
+          liveData = {
             branches: [{ device_id: deviceId, name: d.deviceName, location: d.deviceLocation, present: d.present, absent: d.absent, deviceStatus: d.deviceStatus, lastUpdated: d.lastUpdated }],
             present: d.present,
             absent: d.absent,
             employees: d.employees.map((e: any) => ({ ...e, branch: d.deviceName, location: d.deviceLocation, device_id: deviceId })),
             lastUpdated: d.lastUpdated,
-          });
+          };
         } else {
-          setData(d);
+          liveData = d;
         }
+        // Merge unenrolled punched employees from export/punches + ensure 5 Uai Nkp Unit always visible
+        const NKP_CORRECT_NAMES: Record<string, string> = {
+          '3': 'P Arumugam',
+          '11': 'C Nadesan',
+          '12': 'Mahaboob alli basha',
+          '14': 'A Manohar',
+          '17': 'Virendhar',
+        };
+        function nkpName(branch: string, id: string, fallback: string) {
+          const raw = String(id).replace(/^0+/, '') || '0';
+          if (branch === 'UAI Neikarapatti' && NKP_CORRECT_NAMES[raw]) return NKP_CORRECT_NAMES[raw];
+          if (!fallback || /^Employee\s*\d+$/i.test(fallback)) {
+            return NKP_CORRECT_NAMES[raw] || fallback || `Employee ${raw}`;
+          }
+          return fallback;
+        }
+        // apply correct names and fix lastPunch: don't show first punch as last when still IN (logout)
+        liveData.employees = liveData.employees.map(e => {
+          const lastDir = e.punchDirs?.[e.punchDirs.length - 1];
+          const isStillIn = lastDir === 'IN' || (e.punchTimes.length === 1 && e.status === 'IN');
+          // if still IN, lastPunch should be empty (no logout yet), not duplicate of first
+          const fixedLast = isStillIn ? '' : (e.lastPunch || '');
+          return {
+            ...e,
+            name: nkpName(e.branch, e.id, e.name),
+            lastPunch: fixedLast,
+            lastPunchRaw: isStillIn ? '' : e.lastPunchRaw,
+          };
+        });
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const er = await fetch(`${API_URL}/api/export/punches?from=${today}&to=${today}`);
+          if (er.ok) {
+            const ej = await er.json();
+            const existing = new Set(liveData.employees.map(e => `${e.branch}|${e.id}`));
+            const existingRaw = new Set(liveData.employees.map(e => `${e.branch}|${String(e.id).replace(/^0+/, '')}`));
+            const extras: CombinedEmployee[] = [];
+            for (const row of (ej.rows ?? [])) {
+              const paddedId = String(row.id).padStart(4, '0');
+              const rawId = String(row.id).replace(/^0+/, '');
+              const key = `${row.branch}|${paddedId}`;
+              const key2 = `${row.branch}|${row.id}`;
+              const key3 = `${row.branch}|${rawId}`;
+              if (!existing.has(key) && !existing.has(key2) && !existingRaw.has(key3) && (row.punches?.length ?? 0) > 0) {
+                const br = liveData.branches.find(b => b.name === row.branch);
+                const lastDirRow = row.punchDirs?.[row.punchDirs.length - 1];
+                const isStillInRow = lastDirRow === 'IN' || (row.punches.length === 1 && lastDirRow !== 'OUT');
+                extras.push({
+                  id: paddedId,
+                  name: nkpName(row.branch, row.id, row.name),
+                  status: (lastDirRow === 'OUT' ? 'OUT' : 'IN') as any,
+                  lastPunch: isStillInRow ? '' : (row.punches[row.punches.length - 1] || ''),
+                  lastPunchRaw: '',
+                  punchTimes: row.punches || [],
+                  punchDirs: row.punchDirs || [],
+                  branch: row.branch,
+                  location: row.branch,
+                  device_id: br?.device_id ?? 58,
+                });
+              }
+            }
+            // Ensure the 5 Uai Nkp Unit employees always appear even if no punch today (as Absent)
+            const missingIds = ['14', '3', '11', '17', '12'];
+            for (const mid of missingIds) {
+              const padded = mid.padStart(4, '0');
+              const key = `UAI Neikarapatti|${padded}`;
+              const keyRaw = `UAI Neikarapatti|${mid}`;
+              if (!existing.has(key) && !existingRaw.has(keyRaw) && !extras.some(e => e.id === padded)) {
+                const br = liveData.branches.find(b => b.name === 'UAI Neikarapatti');
+                extras.push({
+                  id: padded,
+                  name: NKP_CORRECT_NAMES[mid],
+                  status: 'OUT',
+                  lastPunch: '',
+                  lastPunchRaw: '',
+                  punchTimes: [],
+                  punchDirs: [],
+                  branch: 'UAI Neikarapatti',
+                  location: 'UAI Neikarapatti',
+                  device_id: br?.device_id ?? 58,
+                });
+              }
+            }
+            if (extras.length > 0) {
+              liveData = { ...liveData, employees: [...liveData.employees, ...extras] };
+            }
+          }
+        } catch { /* ignore merge */ }
+        setData(liveData);
       }
     } catch { /* ignore */ }
   }
@@ -62,9 +152,15 @@ export default function EmployeesPage({ title = 'Employees', deviceId = null }: 
     return data?.branches.map(b => b.name) ?? [];
   }, [data]);
 
+  const isHiddenEmp = (branch: string, id: string) => {
+    const raw = String(id).replace(/^0+/, '');
+    // Hide employee 1 from head office (UAI HEAD OFFICE) as requested
+    if (branch === 'UAI HEAD OFFICE' && (raw === '1' || id === '0001')) return true;
+    return false;
+  };
   const filtered = useMemo(() => {
     if (!data) return [];
-    let list = data.employees;
+    let list = data.employees.filter(e => !isHiddenEmp(e.branch, e.id));
     if (branch !== 'all') list = list.filter(e => e.branch === branch);
     if (query.trim()) {
       const q = query.trim().toLowerCase();
@@ -82,7 +178,7 @@ export default function EmployeesPage({ title = 'Employees', deviceId = null }: 
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
-            <p className="text-[11px] text-gray-500">All employees across branches &ndash; {data?.employees.length ?? 0} total</p>
+            <p className="text-[11px] text-gray-500">All employees across branches &ndash; {data ? data.employees.filter(e => !isHiddenEmp(e.branch, e.id)).length : 0} total</p>
           </div>
         </div>
       </div>

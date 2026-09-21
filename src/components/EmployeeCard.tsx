@@ -17,7 +17,7 @@ function formatDuration(totalSeconds: number): string {
 }
 
 function getInOutTimes(employee: Employee): { inTime: string; outTime: string } {
-  const { punchTimes, punchDirs, status } = employee;
+  const { punchTimes, punchDirs } = employee;
   if (!punchTimes || punchTimes.length === 0) return { inTime: '--:--:--', outTime: '--:--:--' };
 
   let inTime = '--:--:--';
@@ -29,8 +29,8 @@ function getInOutTimes(employee: Employee): { inTime: string; outTime: string } 
     if (dir === 'OUT') outTime = punchTimes[i];
   }
 
-  if (status === 'IN' && outTime !== '--:--:--') outTime = 'Active';
-
+  // Keep actual last OUT time visible even when still IN (don't overwrite with 'Active')
+  // If still IN and no OUT yet, outTime stays '--:--:--' (no logout yet)
   return { inTime, outTime };
 }
 

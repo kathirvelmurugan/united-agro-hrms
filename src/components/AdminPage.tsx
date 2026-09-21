@@ -92,6 +92,75 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   const isSuper = role === 'superadmin';
   const defaultDeviceId = canManageAll ? 24 : (deviceId ?? 24);
 
+  // Left panel – Employee edit/delete/add
+  const [adminEmps, setAdminEmps] = useState<any[]>([]);
+  const [adminEmpSearch, setAdminEmpSearch] = useState('');
+  const [adminEmpDevice, setAdminEmpDevice] = useState<number>(0);
+  const [adminEmpLoading, setAdminEmpLoading] = useState(false);
+  const [editingEmpId, setEditingEmpId] = useState<number | null>(null);
+  const [editEmpForm, setEditEmpForm] = useState({ name: '', badge: '', device_id: 24 });
+  const [addEmpForm, setAddEmpForm] = useState({ name: '', badge: '', device_id: 24, empid: '' });
+  const [adminEmpMsg, setAdminEmpMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [deletingEmpId, setDeletingEmpId] = useState<number | null>(null);
+
+  const fetchAdminEmps = useCallback(async () => {
+    setAdminEmpLoading(true);
+    try {
+      const r = await fetch(`${API_URL}/api/admin/employees?key=admin123`);
+      if (r.ok) {
+        const d = await r.json();
+        setAdminEmps(d.employees || []);
+      }
+    } catch {}
+    setAdminEmpLoading(false);
+  }, []);
+  useEffect(() => { fetchAdminEmps(); }, [fetchAdminEmps]);
+  const filteredAdminEmps = useMemo(() => {
+    let list = adminEmps;
+    if (adminEmpDevice) list = list.filter(e => e.device_id === adminEmpDevice);
+    if (adminEmpSearch.trim()) {
+      const q = adminEmpSearch.trim().toLowerCase();
+      list = list.filter(e => (e.name || '').toLowerCase().includes(q) || String(e.badge || '').includes(q) || String(e.empid || '').includes(q));
+    }
+    return list;
+  }, [adminEmps, adminEmpSearch, adminEmpDevice]);
+  async function handleDeleteAdminEmp(empid: number, name: string) {
+    if (!confirm(`Delete employee "${name}" (#${empid})?`)) return;
+    setDeletingEmpId(empid);
+    try {
+      const r = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid }) });
+      const d = await r.json().catch(() => ({} as any));
+      if (r.ok) { setAdminEmpMsg({ type: 'ok', text: `"${name}" deleted` }); fetchAdminEmps(); }
+      else setAdminEmpMsg({ type: 'err', text: (d as any).error || 'Delete failed' });
+    } catch { setAdminEmpMsg({ type: 'err', text: 'Failed to connect' }); }
+    finally { setDeletingEmpId(null); }
+  }
+  function startEditEmp(e: any) { setEditingEmpId(e.empid); setEditEmpForm({ name: e.name || '', badge: String(e.badge || ''), device_id: e.device_id || 24 }); }
+  async function handleSaveEditEmp(e: React.FormEvent) {
+    e.preventDefault();
+    if (editingEmpId == null) return;
+    try {
+      const del = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid: editingEmpId }) });
+      if (!del.ok) { const dj = await del.json().catch(() => ({} as any)); setAdminEmpMsg({ type: 'err', text: (dj as any).error || 'Delete failed' }); return; }
+      const add = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editEmpForm.name.trim(), badge: editEmpForm.badge.trim(), empid: editingEmpId, device_id: editEmpForm.device_id }) });
+      const aj = await add.json().catch(() => ({} as any));
+      if (add.ok) { setAdminEmpMsg({ type: 'ok', text: `Updated "${editEmpForm.name}"` }); setEditingEmpId(null); fetchAdminEmps(); }
+      else { setAdminEmpMsg({ type: 'err', text: (aj as any).error || 'Re-create failed' }); fetchAdminEmps(); }
+    } catch { setAdminEmpMsg({ type: 'err', text: 'Failed to connect' }); }
+  }
+  async function handleAddAdminEmp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addEmpForm.name.trim() || !addEmpForm.badge.trim()) { setAdminEmpMsg({ type: 'err', text: 'Name and Badge required' }); return; }
+    try {
+      const body: any = { name: addEmpForm.name.trim(), badge: addEmpForm.badge.trim(), device_id: addEmpForm.device_id };
+      if (addEmpForm.empid.trim()) body.empid = parseInt(addEmpForm.empid.trim());
+      const r = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({} as any));
+      if (r.ok) { setAdminEmpMsg({ type: 'ok', text: `Added "${addEmpForm.name}"` }); setAddEmpForm({ name: '', badge: '', device_id: addEmpForm.device_id, empid: '' }); fetchAdminEmps(); }
+      else setAdminEmpMsg({ type: 'err', text: (d as any).error || 'Failed to add' });
+    } catch { setAdminEmpMsg({ type: 'err', text: 'Failed to connect' }); }
+  }
+
   async function fetchUsers() {
     try {
       const r = await fetch(`${API_URL}/api/users?key=admin123`);
@@ -279,7 +348,75 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
         </div>
       </motion.header>
 
-      <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full px-4 sm:px-6 py-4">
+      <main className="flex-1 overflow-hidden flex max-w-7xl mx-auto w-full">
+        {/* LEFT SIDE PANEL – Employee Add / Edit / Delete */}
+        <aside className="w-80 shrink-0 bg-white border-r border-indigo-100 flex flex-col overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-indigo-100 bg-indigo-50/60 flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center"><Users size={12} className="text-white" /></div>
+            <div className="min-w-0">
+              <h2 className="text-xs font-bold text-indigo-900 leading-none">Employees</h2>
+              <p className="text-[10px] text-indigo-500">{adminEmps.length} total</p>
+            </div>
+            <button onClick={fetchAdminEmps} className="ml-auto p-1 rounded hover:bg-white text-indigo-400 hover:text-indigo-600"><RefreshCw size={12} className={adminEmpLoading ? 'animate-spin' : ''} /></button>
+          </div>
+          {adminEmpMsg && (
+            <div className={`mx-3 mt-2 text-[11px] px-2 py-1 rounded border ${adminEmpMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{adminEmpMsg.text}</div>
+          )}
+          <form onSubmit={handleAddAdminEmp} className="m-3 p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1.5">
+            <p className="text-[11px] font-bold text-gray-700 flex items-center gap-1"><Plus size={11} /> Add Employee</p>
+            <input value={addEmpForm.name} onChange={e => setAddEmpForm({ ...addEmpForm, name: e.target.value })} placeholder="Name *" required className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white" />
+            <div className="grid grid-cols-2 gap-1.5">
+              <input value={addEmpForm.badge} onChange={e => setAddEmpForm({ ...addEmpForm, badge: e.target.value })} placeholder="Badge *" required className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white" />
+              <input value={addEmpForm.empid} onChange={e => setAddEmpForm({ ...addEmpForm, empid: e.target.value })} placeholder="EmpID auto" className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white" />
+            </div>
+            <select value={addEmpForm.device_id} onChange={e => setAddEmpForm({ ...addEmpForm, device_id: parseInt(e.target.value) })} className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white">
+              {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
+            </select>
+            <button type="submit" className="w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded">Add</button>
+          </form>
+          <div className="px-3 pb-2 flex gap-1.5">
+            <div className="relative flex-1">
+              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={adminEmpSearch} onChange={e => setAdminEmpSearch(e.target.value)} placeholder="Search..." className="w-full pl-6 pr-2 py-1 border border-gray-200 rounded text-xs bg-white" />
+            </div>
+            <select value={adminEmpDevice} onChange={e => setAdminEmpDevice(parseInt(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-[11px] bg-white">
+              <option value={0}>All</option>
+              {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
+            </select>
+          </div>
+          <div className="flex-1 overflow-y-auto border-t border-gray-100 divide-y divide-gray-100">
+            {adminEmpLoading ? <p className="py-6 text-center text-xs text-gray-400"><Loader2 size={12} className="animate-spin inline" /> Loading...</p>
+            : filteredAdminEmps.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">No employees</p>
+            : filteredAdminEmps.slice(0, 80).map((e: any) => (
+              editingEmpId === e.empid ? (
+                <form key={e.empid} onSubmit={handleSaveEditEmp} className="p-2 bg-amber-50 flex flex-col gap-1">
+                  <input value={editEmpForm.name} onChange={ev => setEditEmpForm({ ...editEmpForm, name: ev.target.value })} className="w-full px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Name" />
+                  <div className="flex gap-1">
+                    <input value={editEmpForm.badge} onChange={ev => setEditEmpForm({ ...editEmpForm, badge: ev.target.value })} className="flex-1 px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Badge" />
+                    <select value={editEmpForm.device_id} onChange={ev => setEditEmpForm({ ...editEmpForm, device_id: parseInt(ev.target.value) })} className="w-24 px-1 py-1 border border-amber-200 rounded text-xs bg-white">
+                      {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setEditingEmpId(null)} className="flex-1 py-1 border border-gray-200 rounded text-xs bg-white"><X size={10} className="inline" /> Cancel</button>
+                    <button type="submit" className="flex-1 py-1 bg-indigo-600 text-white rounded text-xs">Save</button>
+                  </div>
+                </form>
+              ) : (
+                <div key={`${e.empid}-${e.device_id}`} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-gray-800 truncate">{e.name}</p>
+                    <p className="text-[10px] text-gray-500 font-mono">Badge {e.badge} · ID {e.empid} · {locations.find(l => l.device_id === e.device_id)?.name || e.device_name || '-'}</p>
+                  </div>
+                  <button onClick={() => startEditEmp(e)} className="p-1 rounded hover:bg-white border border-transparent hover:border-indigo-200 text-indigo-600"><Pencil size={12} /></button>
+                  <button onClick={() => handleDeleteAdminEmp(e.empid, e.name)} disabled={deletingEmpId === e.empid} className="p-1 rounded hover:bg-red-50 text-red-600 disabled:opacity-50">{deletingEmpId === e.empid ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}</button>
+                </div>
+              )
+            ))}
+          </div>
+        </aside>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
         {msg && (
           <motion.div
             initial={{ opacity: 0, y: -5 }}
@@ -581,6 +718,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
               </table>
             </div>
           )}
+        </div>
         </div>
       </main>
     </div>
