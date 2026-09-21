@@ -120,9 +120,12 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     if (adminEmpDevice) list = list.filter(e => e.device_id === adminEmpDevice);
     if (adminEmpSearch.trim()) {
       const q = adminEmpSearch.trim().toLowerCase();
-      list = list.filter(e => (e.name || '').toLowerCase().includes(q) || String(e.badge || '').includes(q) || String(e.empid || '').includes(q));
+      list = list.filter(e => (e.name || '').toLowerCase().includes(q) || String(e.badge || '').includes(q) || String(e.empid || '').includes(q) || String(e.code_in_device || '').includes(q));
     }
-    return list;
+    const seen = new Set<number>();
+    const unique: typeof list = [];
+    for (const e of list) { if (!seen.has(e.empid)) { seen.add(e.empid); unique.push(e); } }
+    return unique;
   }, [adminEmps, adminEmpSearch, adminEmpDevice]);
   async function handleDeleteAdminEmp(empid: number, name: string) {
     if (!confirm(`Delete employee "${name}" (#${empid})?`)) return;
@@ -405,8 +408,8 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
               ) : (
                 <div key={`${e.empid}-${e.device_id}`} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-800 truncate">{e.name}</p>
-                    <p className="text-[10px] text-gray-500 font-mono">Badge {e.badge} · ID {e.empid} · {locations.find(l => l.device_id === e.device_id)?.name || e.device_name || '-'}</p>
+                    <p className="text-xs font-medium text-gray-800 truncate">{e.name} <span className="font-normal text-gray-500">· {String(e.code_in_device || e.badge).padStart(3, '0')}</span></p>
+                    <p className="text-[10px] text-gray-500 truncate">ID {e.empid} · {locations.find(l => l.device_id === e.device_id)?.name || e.device_name || '-'}</p>
                   </div>
                   <button onClick={() => startEditEmp(e)} className="p-1 rounded hover:bg-white border border-transparent hover:border-indigo-200 text-indigo-600"><Pencil size={12} /></button>
                   <button onClick={() => handleDeleteAdminEmp(e.empid, e.name)} disabled={deletingEmpId === e.empid} className="p-1 rounded hover:bg-red-50 text-red-600 disabled:opacity-50">{deletingEmpId === e.empid ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}</button>
