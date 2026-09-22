@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, ChevronDown, ChevronUp, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X } from 'lucide-react';
+import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X } from 'lucide-react';
 import { API_URL } from '../data/mockData';
 
 interface AdminPageProps {
@@ -83,10 +83,11 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [shiftRules, setShiftRules] = useState<ShiftRule[]>([]);
-  const [showShiftSection, setShowShiftSection] = useState(false);
   const [shiftBusy, setShiftBusy] = useState(false);
   const [shiftMsg, setShiftMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
+  const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
+  const [adminTab, setAdminTab] = useState<'employees' | 'users' | 'shifts'>('employees');
 
   const canManageAll = role === 'superadmin' || role === 'admin';
   const isSuper = role === 'superadmin';
@@ -197,7 +198,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   }, [shiftDevice]);
 
   useEffect(() => {
-    if (!showShiftSection || !shiftDevice) return;
+    if (adminTab !== 'shifts' || !shiftDevice) return;
     setEmpList([]); setSelectedEmps(new Set()); setEmpSearch('');
     fetch(`${API_URL}/api/admin/employees?key=admin123`)
       .then(r => r.ok ? r.json() : { employees: [] })
@@ -208,7 +209,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
         setEmpList(Array.from(unique.values()));
       }).catch(() => setEmpList([]));
     loadShiftRules();
-  }, [shiftDevice, showShiftSection, loadShiftRules]);
+  }, [shiftDevice, adminTab, loadShiftRules]);
 
   const filteredShiftEmps = useMemo(() => {
     if (!empSearch.trim()) return empList;
@@ -221,10 +222,41 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   function toggleAllShiftEmps() { allShiftEmpsSelected ? setSelectedEmps(new Set()) : setSelectedEmps(new Set(filteredShiftEmps.map(e => e.empid))); }
   function toggleShiftEmp(id: number) { setSelectedEmps(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
   function applyShiftPreset(p: typeof SHIFT_PRESETS[number]) { setActivePreset(p.key); if (p.start) setStartTime(p.start); if (p.end) setEndTime(p.end); }
+  function startEditShift(r: ShiftRule) {
+    setEditingShiftId(r.id);
+    setShiftDevice(r.device_id);
+    setStartTime(r.start);
+    setEndTime(r.end);
+    const found = SHIFT_PRESETS.find(pp => pp.start === r.start && pp.end === r.end);
+    setActivePreset(found ? found.key : 'Custom');
+    setStartDate(r.start_date || '');
+    setEndDate(r.end_date || '');
+    if (r.empid) setSelectedEmps(new Set([r.empid]));
+    else setSelectedEmps(new Set());
+    setShiftMsg(null);
+  }
+  function cancelEditShift() {
+    setEditingShiftId(null);
+    setStartTime('09:00'); setEndTime('18:00'); setActivePreset('G');
+    setStartDate(''); setEndDate(''); setSelectedEmps(new Set());
+    setShiftMsg(null);
+  }
 
   async function handleShiftSubmit(e: React.FormEvent) {
     e.preventDefault(); setShiftMsg(null); setShiftBusy(true);
     try {
+      // Edit mode: update single rule
+      if (editingShiftId !== null) {
+        const empidForEdit = selectedEmps.size === 1 ? Array.from(selectedEmps)[0] : (selectedEmps.size === 0 ? null : Array.from(selectedEmps)[0]);
+        const body: any = { id: editingShiftId, device_id: shiftDevice, type: 'shift', name: null, start_time: startTime, end_time: endTime, empid: empidForEdit, start_date: startDate || null, end_date: endDate || null };
+        const r = await fetch(`${API_URL}/api/rules?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const d = await r.json().catch(() => ({} as any));
+        if (r.ok) {
+          setShiftMsg({ type: 'ok', text: 'Rule updated' });
+          setEditingShiftId(null); setSelectedEmps(new Set()); loadShiftRules();
+        } else setShiftMsg({ type: 'err', text: (d as any).error || 'Update failed' });
+        return;
+      }
       const ids = selectedEmps.size > 0 ? Array.from(selectedEmps) : [];
       const bodies = ids.length > 0
         ? ids.map(empid => ({ device_id: shiftDevice, type: 'shift', name: null, start_time: startTime, end_time: endTime, empid, start_date: startDate || null, end_date: endDate || null }))
@@ -352,376 +384,139 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
       </motion.header>
 
       <main className="flex-1 overflow-hidden flex max-w-7xl mx-auto w-full">
-        {/* LEFT SIDE PANEL – Employee Add / Edit / Delete */}
-        <aside className="w-80 shrink-0 bg-white border-r border-indigo-100 flex flex-col overflow-hidden">
-          <div className="px-3 py-2.5 border-b border-indigo-100 bg-indigo-50/60 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center"><Users size={12} className="text-white" /></div>
-            <div className="min-w-0">
-              <h2 className="text-xs font-bold text-indigo-900 leading-none">Employees</h2>
-              <p className="text-[10px] text-indigo-500">{adminEmps.length} total</p>
-            </div>
-            <button onClick={fetchAdminEmps} className="ml-auto p-1 rounded hover:bg-white text-indigo-400 hover:text-indigo-600"><RefreshCw size={12} className={adminEmpLoading ? 'animate-spin' : ''} /></button>
+        {/* Left Nav - All options on left */}
+        <aside className="w-56 shrink-0 bg-white border-r border-indigo-100 flex flex-col">
+          <div className="p-3 border-b border-indigo-100">
+            <p className="text-[11px] font-bold text-indigo-900">Admin Options</p>
+            <p className="text-[10px] text-indigo-500">All settings on left</p>
           </div>
-          {adminEmpMsg && (
-            <div className={`mx-3 mt-2 text-[11px] px-2 py-1 rounded border ${adminEmpMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{adminEmpMsg.text}</div>
-          )}
-          <form onSubmit={handleAddAdminEmp} className="m-3 p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1.5">
-            <p className="text-[11px] font-bold text-gray-700 flex items-center gap-1"><Plus size={11} /> Add Employee</p>
-            <input value={addEmpForm.name} onChange={e => setAddEmpForm({ ...addEmpForm, name: e.target.value })} placeholder="Name *" required className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white" />
-            <div className="grid grid-cols-2 gap-1.5">
-              <input value={addEmpForm.badge} onChange={e => setAddEmpForm({ ...addEmpForm, badge: e.target.value })} placeholder="Badge *" required className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white" />
-              <input value={addEmpForm.empid} onChange={e => setAddEmpForm({ ...addEmpForm, empid: e.target.value })} placeholder="EmpID auto" className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white" />
-            </div>
-            <select value={addEmpForm.device_id} onChange={e => setAddEmpForm({ ...addEmpForm, device_id: parseInt(e.target.value) })} className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white">
-              {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
-            </select>
-            <button type="submit" className="w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded">Add</button>
-          </form>
-          <div className="px-3 pb-2 flex gap-1.5">
-            <div className="relative flex-1">
-              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={adminEmpSearch} onChange={e => setAdminEmpSearch(e.target.value)} placeholder="Search..." className="w-full pl-6 pr-2 py-1 border border-gray-200 rounded text-xs bg-white" />
-            </div>
-            <select value={adminEmpDevice} onChange={e => setAdminEmpDevice(parseInt(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-[11px] bg-white">
-              <option value={0}>All</option>
-              {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 overflow-y-auto border-t border-gray-100 divide-y divide-gray-100">
-            {adminEmpLoading ? <p className="py-6 text-center text-xs text-gray-400"><Loader2 size={12} className="animate-spin inline" /> Loading...</p>
-            : filteredAdminEmps.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">No employees</p>
-            : filteredAdminEmps.slice(0, 80).map((e: any) => (
-              editingEmpId === e.empid ? (
-                <form key={e.empid} onSubmit={handleSaveEditEmp} className="p-2 bg-amber-50 flex flex-col gap-1">
-                  <input value={editEmpForm.name} onChange={ev => setEditEmpForm({ ...editEmpForm, name: ev.target.value })} className="w-full px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Name" />
-                  <div className="flex gap-1">
-                    <input value={editEmpForm.badge} onChange={ev => setEditEmpForm({ ...editEmpForm, badge: ev.target.value })} className="flex-1 px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Badge" />
-                    <select value={editEmpForm.device_id} onChange={ev => setEditEmpForm({ ...editEmpForm, device_id: parseInt(ev.target.value) })} className="w-24 px-1 py-1 border border-amber-200 rounded text-xs bg-white">
-                      {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => setEditingEmpId(null)} className="flex-1 py-1 border border-gray-200 rounded text-xs bg-white"><X size={10} className="inline" /> Cancel</button>
-                    <button type="submit" className="flex-1 py-1 bg-indigo-600 text-white rounded text-xs">Save</button>
-                  </div>
-                </form>
-              ) : (
-                <div key={`${e.empid}-${e.device_id}`} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-800 truncate">{e.name} <span className="font-normal text-gray-500">· {String(e.code_in_device || e.badge).padStart(3, '0')}</span></p>
-                    <p className="text-[10px] text-gray-500 truncate">ID {e.empid} · {locations.find(l => l.device_id === e.device_id)?.name || e.device_name || '-'}</p>
-                  </div>
-                  <button onClick={() => startEditEmp(e)} className="p-1 rounded hover:bg-white border border-transparent hover:border-indigo-200 text-indigo-600"><Pencil size={12} /></button>
-                  <button onClick={() => handleDeleteAdminEmp(e.empid, e.name)} disabled={deletingEmpId === e.empid} className="p-1 rounded hover:bg-red-50 text-red-600 disabled:opacity-50">{deletingEmpId === e.empid ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}</button>
-                </div>
-              )
-            ))}
+          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+            <button onClick={() => setAdminTab('employees')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='employees' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 text-indigo-700'}`}>
+              <Users size={14}/> Employees <span className="ml-auto text-[10px] opacity-70">{adminEmps.length}</span>
+            </button>
+            <button onClick={() => setAdminTab('users')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='users' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 text-indigo-700'}`}>
+              <Shield size={14}/> Users <span className="ml-auto text-[10px] opacity-70">{users.length}</span>
+            </button>
+            <button onClick={() => setAdminTab('shifts')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='shifts' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 text-indigo-700'}`}>
+              <Clock size={14}/> Shift Management <span className="ml-auto text-[10px] opacity-70">{shiftRules.length}</span>
+            </button>
+          </nav>
+          <div className="p-3 border-t border-indigo-100">
+            <p className="text-[9px] text-indigo-400 leading-tight">Shifts support From/To for future dates. Edit & Delete per rule.</p>
           </div>
         </aside>
 
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
-        {msg && (
-          <motion.div
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`text-xs px-3 py-1.5 rounded-lg mb-3 ${msgType === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
-          >
-            {msg}
-          </motion.div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-          {/* Add User Form */}
-          <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm">
-            <h2 className="text-xs font-semibold text-indigo-800 mb-3 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center">
-                <Plus size={12} className="text-indigo-600" />
-              </div>
-              Add User
-            </h2>
-            <form onSubmit={handleCreate} className="space-y-2">
-              <div>
-                <label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Email</label>
-                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required
-                  placeholder="user@example.com"
-                  autoComplete="off"
-                  className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-white" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Password</label>
-                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required
-                  autoComplete="new-password"
-                  className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-white" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Label</label>
-                <input type="text" value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} required placeholder="Manager - Location"
-                  className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-white" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Role</label>
-                  <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-                    className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-white">
-                    <option value="manager">Manager</option>
-                    {isSuper && <option value="admin">Admin</option>}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Unit / Location</label>
-                  <select value={form.device_id} onChange={e => setForm({ ...form, device_id: parseInt(e.target.value) })}
-                    disabled={!canManageAll}
-                    className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-white disabled:bg-indigo-50 disabled:text-indigo-400">
-                    {(canManageAll ? locations : locations.filter(l => l.device_id === deviceId)).map(loc => (
-                      <option key={loc.device_id} value={loc.device_id}>{loc.name} ({loc.location})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <button type="submit" className="w-full px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm">
-                <Plus size={12} /> Create User
-              </button>
-            </form>
-          </div>
-
-          {/* Shift Management Section */}
-          {canManageAll && (
-            <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm flex flex-col">
-              <button onClick={() => setShowShiftSection(!showShiftSection)}
-                className="w-full px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between hover:bg-indigo-50/50 transition-colors shrink-0">
-                <h2 className="text-xs font-semibold text-indigo-800 flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center">
-                    <Clock size={12} className="text-indigo-600" />
+        <div className="flex-1 overflow-y-auto bg-gradient-to-br from-blue-50/20 via-indigo-50/10 to-violet-50/10 p-4">
+          {adminTab === 'employees' && (
+            <div className="max-w-3xl mx-auto space-y-3">
+              <div className="bg-white rounded-xl border border-indigo-100 p-3">
+                <h2 className="text-xs font-bold text-indigo-800 mb-2 flex items-center gap-2"><Users size={12} className="text-indigo-600"/> Employees — {adminEmps.length} total</h2>
+                {adminEmpMsg && (<div className={`text-[11px] px-2 py-1 rounded border mb-2 ${adminEmpMsg.type==='ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{adminEmpMsg.text}</div>)}
+                <form onSubmit={handleAddAdminEmp} className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1.5">
+                  <p className="text-[11px] font-bold text-gray-700 flex items-center gap-1"><Plus size={11}/> Add Employee</p>
+                  <input value={addEmpForm.name} onChange={e=>setAddEmpForm({...addEmpForm,name:e.target.value})} placeholder="Name *" required className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white"/>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input value={addEmpForm.badge} onChange={e=>setAddEmpForm({...addEmpForm,badge:e.target.value})} placeholder="Badge *" required className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white"/>
+                    <input value={addEmpForm.empid} onChange={e=>setAddEmpForm({...addEmpForm,empid:e.target.value})} placeholder="EmpID auto" className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white"/>
                   </div>
-                  Shift Management
-                </h2>
-                {showShiftSection ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
-              </button>
-
-              {showShiftSection && (
-                <div className="p-4 space-y-3 overflow-y-auto flex-1">
-                  {shiftMsg && (
-                    <div className={`text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 ${shiftMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {shiftMsg.type === 'err' && <AlertCircle size={11} />}{shiftMsg.text}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleShiftSubmit} className="space-y-2.5">
-                    {/* Unit */}
-                    <div>
-                      <label className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider mb-0.5 block">1. Select Unit</label>
-                      <select value={shiftDevice} onChange={e => setShiftDevice(parseInt(e.target.value))}
-                        className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white">
-                        {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name} — {l.location}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Shift */}
-                    <div>
-                      <label className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider mb-0.5 block">2. Choose Shift</label>
-                      <div className="grid grid-cols-5 gap-1.5 mb-1.5">
-                        {SHIFT_PRESETS.map(p => (
-                          <button key={p.key} type="button" onClick={() => applyShiftPreset(p)}
-                            className={`py-1 rounded-lg text-center border-2 transition-all text-[9px] ${activePreset === p.key ? p.active : p.color}`}>
-                            <span className="block font-bold">{p.key}</span>
-                            <span className="block opacity-70">{p.time}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {/* Time + Date in 4-col grid */}
-                      <div className="grid grid-cols-4 gap-1.5">
-                        <div>
-                          <label className="text-[8px] text-indigo-400 font-medium block mb-0.5">Start</label>
-                          <input type="time" value={startTime} onChange={e => { setStartTime(e.target.value); setActivePreset('Custom'); }}
-                            className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] text-center font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white" />
-                        </div>
-                        <div>
-                          <label className="text-[8px] text-indigo-400 font-medium block mb-0.5">End</label>
-                          <input type="time" value={endTime} onChange={e => { setEndTime(e.target.value); setActivePreset('Custom'); }}
-                            className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] text-center font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white" />
-                        </div>
-                        <div>
-                          <label className="text-[8px] text-indigo-400 font-medium block mb-0.5">From</label>
-                          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                            className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white" />
-                        </div>
-                        <div>
-                          <label className="text-[8px] text-indigo-400 font-medium block mb-0.5">To</label>
-                          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                            className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Employees */}
-                    <div>
-                      <label className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider mb-0.5 block">3. Assign Employees</label>
-                      <div className="border border-indigo-200 rounded-lg overflow-hidden">
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
-                          <Search size={10} className="text-indigo-400" />
-                          <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search name, badge, or ID..." className="flex-1 text-[10px] bg-transparent outline-none" />
-                          {empList.length > 0 && (
-                            <button type="button" onClick={toggleAllShiftEmps}
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${allShiftEmpsSelected ? 'bg-indigo-200 text-indigo-800' : 'bg-indigo-100 text-indigo-600'}`}>
-                              {allShiftEmpsSelected ? 'Clear' : 'All'}
-                            </button>
-                          )}
-                        </div>
-                        <div className="max-h-32 overflow-y-auto">
-                          {filteredShiftEmps.length === 0 && <p className="text-[10px] text-indigo-400 py-2 text-center">No employees</p>}
-                          {filteredShiftEmps.map(e => (
-                            <label key={e.empid} className={`flex items-center gap-1.5 px-2.5 py-1 cursor-pointer border-b border-indigo-50 last:border-0 min-w-0 ${selectedEmps.has(e.empid) ? 'bg-indigo-50' : 'hover:bg-indigo-50/50'}`}>
-                              <input type="checkbox" checked={selectedEmps.has(e.empid)} onChange={() => toggleShiftEmp(e.empid)} className="w-3 h-3 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 shrink-0" />
-                              <span className="text-[10px] font-medium text-indigo-800 flex-1 truncate">{e.name}</span>
-                              <span className="text-[8px] text-indigo-500 font-mono shrink-0">ID {e.codeInDevice}</span>
-                              <span className="text-[8px] text-indigo-400 font-mono shrink-0">#{e.badge}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className="px-2.5 py-1 bg-indigo-50 border-t border-indigo-100 flex items-center justify-between">
-                          <span className="text-[8px] text-indigo-400">{empList.length} employees</span>
-                          {selectedEmps.size > 0 ? <span className="text-[8px] font-bold text-indigo-600">{selectedEmps.size} selected</span> : <span className="text-[8px] text-indigo-400 italic">None = whole device</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button type="submit" disabled={shiftBusy}
-                      className="w-full px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-60 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm">
-                      {shiftBusy ? <Loader2 size={12} className="animate-spin" /> : <CalendarPlus size={12} />}
-                      {shiftBusy ? 'Adding…' : selectedEmps.size > 0 ? `Add Rule for ${selectedEmps.size} Employee${selectedEmps.size > 1 ? 's' : ''}` : 'Add Rule for Whole Device'}
-                    </button>
-                  </form>
-
-                  {/* Existing Rules */}
-                  {shiftRules.length > 0 && (
-                    <div className="border border-indigo-200 rounded-lg overflow-hidden">
-                      <div className="px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
-                        <span className="text-[10px] font-bold text-indigo-800">Existing Rules ({shiftRules.length})</span>
-                      </div>
-                      <div className="max-h-28 overflow-y-auto divide-y divide-indigo-50">
-                        {shiftRules.map(r => {
-                          const emp = empList.find(e => e.empid === r.empid);
-                          return (
-                            <div key={r.id} className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-indigo-50/50">
-                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
-                                <Clock size={8} />{r.start}–{r.end}
-                              </span>
-                              <span className="text-[10px] text-indigo-700 flex-1 truncate">{emp ? `${emp.name} (ID ${emp.codeInDevice})` : <em className="text-indigo-400">Whole device</em>}</span>
-                              <span className="text-[8px] text-indigo-400 shrink-0">{r.start_date || ''}{r.start_date && r.end_date ? '→' : ''}{r.end_date || ''}</span>
-                              <button onClick={() => deleteShiftRule(r.id)} disabled={deletingRuleId === r.id} className="p-0.5 rounded hover:bg-red-50 text-indigo-400 hover:text-red-500 shrink-0">
-                                {deletingRuleId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  <select value={addEmpForm.device_id} onChange={e=>setAddEmpForm({...addEmpForm,device_id:parseInt(e.target.value)})} className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white">
+                    {locations.map(l=> <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
+                  </select>
+                  <button type="submit" className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg">Add</button>
+                </form>
+                <div className="flex gap-1.5 mt-3">
+                  <div className="relative flex-1">
+                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
+                    <input value={adminEmpSearch} onChange={e=>setAdminEmpSearch(e.target.value)} placeholder="Search name, badge, ID..." className="w-full pl-6 pr-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white"/>
+                  </div>
+                  <select value={adminEmpDevice} onChange={e=>setAdminEmpDevice(parseInt(e.target.value))} className="w-28 px-1 py-1 border border-gray-200 rounded-lg text-xs bg-white">
+                    <option value={0}>All Units</option>
+                    {locations.map(l=> <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
+                  </select>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Users Table */}
-        <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
-          <div className="px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-indigo-800 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center">
-                <Users size={12} className="text-indigo-600" />
-              </div>
-              Users
-              {canManageAll && (
-                <select value={userDeviceFilter} onChange={e => setUserDeviceFilter(parseInt(e.target.value))}
-                  className="ml-2 text-[10px] font-normal px-1.5 py-0.5 border border-indigo-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500/30 bg-white">
-                  <option value={0}>All Units</option>
-                  {locations.map(l => <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
-                </select>
-              )}
-            </h2>
-            <button onClick={() => { setLoading(true); fetchUsers(); }} className="text-[10px] text-indigo-400 hover:text-indigo-600 flex items-center gap-1">
-              <RefreshCw size={10} /> Refresh
-            </button>
-          </div>
-          {loading ? (
-            <div className="text-center py-6 text-indigo-400 text-xs">Loading...</div>
-          ) : visibleUsers.length === 0 ? (
-            <div className="text-center py-6 text-indigo-400 text-xs">No users yet</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-indigo-50/80">
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Email</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Label</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Role</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Unit</th>
-                    <th className="px-4 py-2 text-right text-[10px] font-semibold text-indigo-600 uppercase">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-indigo-100">
-                  {visibleUsers.map(u => editingUser === u.username ? (
-                    <tr key={u.username} className="bg-indigo-50/80">
-                      <td className="px-4 py-2 text-xs font-medium text-indigo-800">{u.username}</td>
-                      <td className="px-4 py-2">
-                        <input type="text" value={editForm.label} onChange={e => setEditForm({ ...editForm, label: e.target.value })}
-                          className="w-full px-2 py-1 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/30 bg-white" />
-                      </td>
-                      <td className="px-4 py-2">
-                        <select value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}
-                          className="w-full px-2 py-1 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/30 bg-white">
-                          <option value="manager">Manager</option>
-                          {isSuper && <option value="admin">Admin</option>}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2">
-                        <select value={editForm.device_id} onChange={e => setEditForm({ ...editForm, device_id: parseInt(e.target.value) })}
-                          className="w-full px-2 py-1 border border-indigo-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/30 bg-white">
-                          {locations.map(loc => <option key={loc.device_id} value={loc.device_id}>{loc.name}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => setEditingUser(null)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                            <X size={12} />
-                          </button>
-                          <button onClick={handleEdit} className="inline-flex items-center gap-1 text-[10px] text-white bg-indigo-500 hover:bg-indigo-600 px-2 py-0.5 rounded-lg transition-colors">
-                            Save
-                          </button>
+                <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto divide-y divide-gray-100">
+                  {adminEmpLoading ? <p className="py-6 text-center text-xs text-gray-400"><Loader2 size={12} className="animate-spin inline"/> Loading...</p>
+                  : filteredAdminEmps.length===0 ? <p className="py-6 text-center text-xs text-gray-400">No employees</p>
+                  : filteredAdminEmps.slice(0,120).map((e:any)=> (
+                    editingEmpId===e.empid ? (
+                      <form key={e.empid} onSubmit={handleSaveEditEmp} className="p-2 bg-amber-50 flex flex-col gap-1">
+                        <input value={editEmpForm.name} onChange={ev=>setEditEmpForm({...editEmpForm,name:ev.target.value})} className="w-full px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Name"/>
+                        <div className="flex gap-1">
+                          <input value={editEmpForm.badge} onChange={ev=>setEditEmpForm({...editEmpForm,badge:ev.target.value})} className="flex-1 px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Badge"/>
+                          <select value={editEmpForm.device_id} onChange={ev=>setEditEmpForm({...editEmpForm,device_id:parseInt(ev.target.value)})} className="w-28 px-1 py-1 border border-amber-200 rounded text-xs bg-white">
+                            {locations.map(l=> <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
+                          </select>
                         </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={u.username} className="hover:bg-indigo-50/50">
-                      <td className="px-4 py-2 text-xs font-medium text-indigo-800">{u.username}</td>
-                      <td className="px-4 py-2 text-xs text-indigo-600">{u.label}</td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : u.role === 'superadmin' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-50 text-indigo-600'}`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-xs text-indigo-500">{u.location || '-'}</td>
-                      <td className="px-4 py-2 text-right">
-                        {u.role !== 'superadmin' && (
-                          <div className="inline-flex items-center gap-1">
-                            <button onClick={() => startEdit(u)}
-                              className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors">
-                              <Pencil size={10} /> Edit
-                            </button>
-                            <button onClick={() => handleDelete(u.username)}
-                              className="inline-flex items-center gap-0.5 text-[10px] text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-lg transition-colors">
-                              <Trash2 size={10} /> Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+                        <div className="flex gap-1">
+                          <button type="button" onClick={()=>setEditingEmpId(null)} className="flex-1 py-1 border border-gray-200 rounded text-xs bg-white"><X size={10} className="inline"/> Cancel</button>
+                          <button type="submit" className="flex-1 py-1 bg-indigo-600 text-white rounded text-xs">Save</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div key={`${e.empid}-${e.device_id}`} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-800 truncate">{e.name} <span className="font-normal text-gray-500">· {String(e.code_in_device || e.badge).padStart(3,'0')}</span></p>
+                          <p className="text-[10px] text-gray-500 truncate">ID {e.empid} · {locations.find(l=>l.device_id===e.device_id)?.name || e.device_name || '-'}</p>
+                        </div>
+                        <button onClick={()=>startEditEmp(e)} className="p-1 rounded hover:bg-white border border-transparent hover:border-indigo-200 text-indigo-600"><Pencil size={12}/></button>
+                        <button onClick={()=>handleDeleteAdminEmp(e.empid,e.name)} disabled={deletingEmpId===e.empid} className="p-1 rounded hover:bg-red-50 text-red-600 disabled:opacity-50">{deletingEmpId===e.empid ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>}</button>
+                      </div>
+                    )
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
           )}
-        </div>
+
+          {adminTab === 'users' && (
+            <div className="max-w-4xl mx-auto space-y-4">
+              {msg && (<motion.div initial={{opacity:0,y:-5}} animate={{opacity:1,y:0}} className={`text-xs px-3 py-1.5 rounded-lg ${msgType==='success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{msg}</motion.div>)}
+              <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm">
+                <h2 className="text-xs font-semibold text-indigo-800 mb-3 flex items-center gap-2"><div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center"><Plus size={12} className="text-indigo-600"/></div>Add User</h2>
+                <form onSubmit={handleCreate} className="space-y-2">
+                  <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Email</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required placeholder="user@example.com" autoComplete="off" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
+                  <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Password</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required autoComplete="new-password" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
+                  <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Label</label><input type="text" value={form.label} onChange={e=>setForm({...form,label:e.target.value})} required placeholder="Manager - Location" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Role</label><select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"><option value="manager">Manager</option>{isSuper && <option value="admin">Admin</option>}</select></div>
+                    <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Unit / Location</label><select value={form.device_id} onChange={e=>setForm({...form,device_id:parseInt(e.target.value)})} disabled={!canManageAll} className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white disabled:bg-indigo-50"><option value={0}>Select</option>{(canManageAll ? locations : locations.filter(l=>l.device_id===deviceId)).map(loc=> <option key={loc.device_id} value={loc.device_id}>{loc.name} ({loc.location})</option>)}</select></div>
+                  </div>
+                  <button type="submit" className="w-full px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"><Plus size={12}/> Create User</button>
+                </form>
+              </div>
+              <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
+                <div className="px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between">
+                  <h2 className="text-xs font-semibold text-indigo-800 flex items-center gap-2"><div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center"><Users size={12} className="text-indigo-600"/></div>Users {canManageAll && (<select value={userDeviceFilter} onChange={e=>setUserDeviceFilter(parseInt(e.target.value))} className="ml-2 text-[10px] px-1.5 py-0.5 border border-indigo-200 rounded-lg bg-white"><option value={0}>All Units</option>{locations.map(l=> <option key={l.device_id} value={l.device_id}>{l.name}</option>)}</select>)}</h2>
+                  <button onClick={()=>{setLoading(true);fetchUsers();}} className="text-[10px] text-indigo-400 hover:text-indigo-600 flex items-center gap-1"><RefreshCw size={10}/> Refresh</button>
+                </div>
+                {loading ? <div className="text-center py-6 text-xs text-indigo-400">Loading...</div> : visibleUsers.length===0 ? <div className="text-center py-6 text-xs text-indigo-400">No users yet</div> : (
+                  <div className="overflow-x-auto"><table className="w-full"><thead><tr className="bg-indigo-50/80"><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Email</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Label</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Role</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Unit</th><th className="px-4 py-2 text-right text-[10px] font-semibold text-indigo-600 uppercase">Action</th></tr></thead><tbody className="divide-y divide-indigo-100">{visibleUsers.map(u=> editingUser===u.username ? (
+                    <tr key={u.username} className="bg-indigo-50/80"><td className="px-4 py-2 text-xs">{u.username}</td><td className="px-4 py-2"><input value={editForm.label} onChange={e=>setEditForm({...editForm,label:e.target.value})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"/></td><td className="px-4 py-2"><select value={editForm.role} onChange={e=>setEditForm({...editForm,role:e.target.value})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"><option value="manager">Manager</option>{isSuper && <option value="admin">Admin</option>}</select></td><td className="px-4 py-2"><select value={editForm.device_id} onChange={e=>setEditForm({...editForm,device_id:parseInt(e.target.value)})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white">{locations.map(loc=> <option key={loc.device_id} value={loc.device_id}>{loc.name}</option>)}</select></td><td className="px-4 py-2"><div className="flex items-center gap-1 justify-end"><button onClick={()=>setEditingUser(null)} className="p-1 rounded hover:bg-gray-100"><X size={12}/></button><button onClick={handleEdit} className="text-[10px] bg-indigo-500 text-white px-2 py-0.5 rounded">Save</button></div></td></tr>
+                  ) : (
+                    <tr key={u.username} className="hover:bg-indigo-50/50"><td className="px-4 py-2 text-xs">{u.username}</td><td className="px-4 py-2 text-xs">{u.label}</td><td className="px-4 py-2"><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${u.role==='admin' ? 'bg-indigo-100 text-indigo-700' : u.role==='superadmin' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-50 text-indigo-600'}`}>{u.role}</span></td><td className="px-4 py-2 text-xs">{u.location || '-'}</td><td className="px-4 py-2 text-right"><div className="inline-flex gap-1">{u.role!=='superadmin' && <><button onClick={()=>startEdit(u)} className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded hover:bg-indigo-100"><Pencil size={10} className="inline"/> Edit</button><button onClick={()=>handleDelete(u.username)} className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded hover:bg-red-100"><Trash2 size={10} className="inline"/> Delete</button></>}</div></td></tr>
+                  ))}</tbody></table></div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {adminTab === 'shifts' && (
+            <div className="max-w-3xl mx-auto space-y-3">
+              <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm">
+                <h2 className="text-xs font-bold text-indigo-800 mb-1 flex items-center gap-2"><Clock size={14} className="text-indigo-600"/> Shift Management — Edit & Delete</h2>
+                <p className="text-[10px] text-indigo-500 mb-3">Create for all units. Use From/To for future dates. Edit (pencil) or Delete (trash) per rule below.</p>
+                {shiftMsg && (<div className={`text-[10px] px-2.5 py-1.5 rounded-lg mb-2 flex items-center gap-1 ${shiftMsg.type==='ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{shiftMsg.type==='err' && <AlertCircle size={11}/>}{shiftMsg.text}</div>)}
+                <form onSubmit={handleShiftSubmit} className="space-y-2.5">
+                  <div><label className="text-[9px] font-bold text-indigo-600 uppercase">1. Select Unit</label><select value={shiftDevice} onChange={e=>setShiftDevice(parseInt(e.target.value))} className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white">{locations.map(l=> <option key={l.device_id} value={l.device_id}>{l.name} — {l.location}</option>)}</select></div>
+                  <div><label className="text-[9px] font-bold text-indigo-600 uppercase">2. Choose Shift</label><div className="grid grid-cols-5 gap-1.5 mb-1.5">{SHIFT_PRESETS.map(p=> (<button key={p.key} type="button" onClick={()=>applyShiftPreset(p)} className={`py-1 rounded-lg text-center border-2 text-[9px] ${activePreset===p.key ? p.active : p.color}`}><span className="block font-bold">{p.key}</span><span className="block opacity-70">{p.time}</span></button>))}</div><div className="grid grid-cols-4 gap-1.5"><div><label className="text-[8px] text-indigo-400">Start</label><input type="time" value={startTime} onChange={e=>{setStartTime(e.target.value);setActivePreset('Custom');}} className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] text-center font-mono bg-white"/></div><div><label className="text-[8px] text-indigo-400">End</label><input type="time" value={endTime} onChange={e=>{setEndTime(e.target.value);setActivePreset('Custom');}} className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] text-center font-mono bg-white"/></div><div><label className="text-[8px] text-indigo-400">From</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] bg-white"/></div><div><label className="text-[8px] text-indigo-400">To</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full px-1.5 py-1 border border-indigo-200 rounded-lg text-[10px] bg-white"/></div></div></div>
+                  <div><label className="text-[9px] font-bold text-indigo-600 uppercase">3. Assign Employees</label><div className="border border-indigo-200 rounded-lg overflow-hidden"><div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100"><Search size={10} className="text-indigo-400"/><input value={empSearch} onChange={e=>setEmpSearch(e.target.value)} placeholder="Search name, badge, or ID..." className="flex-1 text-[10px] bg-transparent outline-none"/><button type="button" onClick={toggleAllShiftEmps} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${allShiftEmpsSelected ? 'bg-indigo-200 text-indigo-800' : 'bg-indigo-100 text-indigo-600'}`}>{allShiftEmpsSelected ? 'Clear':'All'}</button></div><div className="max-h-36 overflow-y-auto">{filteredShiftEmps.length===0 ? <p className="text-[10px] text-indigo-400 py-2 text-center">No employees on this unit</p> : filteredShiftEmps.map(e=> (<label key={e.empid} className={`flex items-center gap-1.5 px-2.5 py-1 border-b border-indigo-50 last:border-0 ${selectedEmps.has(e.empid) ? 'bg-indigo-50' : 'hover:bg-indigo-50/50'}`}><input type="checkbox" checked={selectedEmps.has(e.empid)} onChange={()=>toggleShiftEmp(e.empid)} className="w-3 h-3"/><span className="text-[10px] flex-1 truncate">{e.name}</span><span className="text-[8px] font-mono">ID {e.codeInDevice}</span></label>))}</div><div className="px-2.5 py-1 bg-indigo-50 border-t border-indigo-100 flex justify-between text-[8px]"><span className="text-indigo-400">{empList.length} employees</span>{selectedEmps.size>0 ? <span className="font-bold text-indigo-600">{selectedEmps.size} selected</span> : <span className="italic text-indigo-400">None = whole device</span>}</div></div></div>
+                  {editingShiftId!==null && (<div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700"><span className="text-[10px] font-bold">Editing #{editingShiftId}</span><button type="button" onClick={cancelEditShift} className="px-2 py-0.5 bg-white border border-amber-200 rounded text-[10px]"><X size={10} className="inline"/> Cancel</button></div>)}
+                  <button type="submit" disabled={shiftBusy} className={`w-full py-1.5 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 ${editingShiftId!==null ? 'bg-gradient-to-r from-amber-500 to-amber-600' : 'bg-gradient-to-r from-indigo-500 to-indigo-600'}`}>{shiftBusy ? <Loader2 size={12} className="animate-spin"/> : editingShiftId!==null ? <Pencil size={12}/> : <CalendarPlus size={12}/>}{shiftBusy ? (editingShiftId!==null ? 'Updating…' : 'Adding…') : editingShiftId!==null ? 'Update Rule' : selectedEmps.size>0 ? `Add for ${selectedEmps.size} employee(s)` : 'Add for Whole Device'}</button>
+                </form>
+                {shiftRules.length>0 && (<div className="mt-3 border border-indigo-200 rounded-lg overflow-hidden"><div className="px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100 text-[10px] font-bold text-indigo-800">Existing Rules — Edit / Delete ({shiftRules.length})</div><div className="max-h-40 overflow-y-auto divide-y divide-indigo-50">{shiftRules.map(r=> {const emp=empList.find(e=>e.empid===r.empid); return (<div key={r.id} className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-indigo-50/50"><span className="text-[8px] font-bold px-1 py-0.5 rounded bg-indigo-100 border border-indigo-200"><Clock size={8} className="inline"/> {r.start}–{r.end}</span><span className="text-[10px] flex-1 truncate">{emp ? `${emp.name} (ID ${emp.codeInDevice})` : <em className="text-indigo-400">Whole device</em>}</span><span className="text-[8px] text-indigo-400">{r.start_date || ''}{r.start_date && r.end_date ? '→' : ''}{r.end_date || ''}{!r.start_date && !r.end_date ? 'no limit':''}</span><button onClick={()=>startEditShift(r)} className={`p-1 rounded ${editingShiftId===r.id ? 'bg-amber-100 text-amber-700' : 'hover:bg-indigo-100 text-indigo-600'}`}><Pencil size={12}/></button><button onClick={()=>deleteShiftRule(r.id)} disabled={deletingRuleId===r.id} className="p-1 rounded hover:bg-red-50 text-red-500">{deletingRuleId===r.id ? <Loader2 size={10} className="animate-spin"/> : <Trash2 size={10}/>}</button></div>)})}</div></div>)}
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

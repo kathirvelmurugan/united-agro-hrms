@@ -139,8 +139,10 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
       .then((d: MonthlyData) => {
         if (cancelled) return;
         setData(d);
+        const nowMonth = new Date().toISOString().slice(0, 7);
+        const cur = d.months.find(m => m.month === nowMonth);
         const last = d.months[d.months.length - 1];
-        setMonth(last ? last.month : '');
+        setMonth(cur ? cur.month : (last ? last.month : ''));
       })
       .catch(err => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');

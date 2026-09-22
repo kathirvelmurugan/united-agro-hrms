@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Search, Clock, Target, RefreshCw, CalendarPlus, Trash2, Loader2, AlertCircle, ChevronDown, ChevronUp
+  Search, Clock, Target, RefreshCw, CalendarPlus, Trash2, Loader2, AlertCircle, ChevronDown, ChevronUp, Pencil, X
 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
 
@@ -58,6 +58,7 @@ export default function ShiftManagementPage() {
   const [loadingRules, setLoadingRules] = useState(false);
   const [showRules, setShowRules] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/api/locations`)
@@ -132,11 +133,61 @@ export default function ShiftManagementPage() {
     if (preset.end) setEndTime(preset.end);
   }
 
+  function startEdit(r: ShiftRule) {
+    setEditingId(r.id);
+    setDevice(r.device_id);
+    setStartTime(r.start);
+    setEndTime(r.end);
+    const found = SHIFT_PRESETS.find(p => p.start === r.start && p.end === r.end);
+    setActivePreset(found ? found.key : 'Custom');
+    setStartDate(r.start_date || '');
+    setEndDate(r.end_date || '');
+    if (r.empid) setSelectedEmps(new Set([r.empid]));
+    else setSelectedEmps(new Set());
+    setName(r.name || '');
+    setMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setStartTime('09:00'); setEndTime('18:00'); setActivePreset('G');
+    setStartDate(''); setEndDate(''); setName(''); setSelectedEmps(new Set());
+    setMsg(null);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     setBusy(true);
     try {
+      // Edit mode: update single rule by id
+      if (editingId !== null) {
+        const empidForEdit = selectedEmps.size === 1 ? Array.from(selectedEmps)[0] : (selectedEmps.size === 0 ? null : Array.from(selectedEmps)[0]);
+        const body: Record<string, unknown> = {
+          id: editingId,
+          device_id: device, type: 'shift', name: name.trim() || null,
+          start_time: startTime, end_time: endTime, empid: empidForEdit,
+          start_date: startDate || null, end_date: endDate || null,
+        };
+        const r = await fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setMsg({ type: 'err', text: d.error || 'Update failed' });
+        } else {
+          setMsg({ type: 'ok', text: 'Shift rule updated' });
+          setEditingId(null);
+          setSelectedEmps(new Set());
+          setName('');
+          loadRules();
+        }
+        return;
+      }
+
       const empsToSubmit = selectedEmps.size > 0 ? Array.from(selectedEmps) : [];
       const bodies = empsToSubmit.length > 0
         ? empsToSubmit.map(empid => ({
@@ -219,11 +270,18 @@ export default function ShiftManagementPage() {
             </div>
           )}
 
-          {/* Add Rule Form */}
-          <form onSubmit={submit} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-sm font-bold text-gray-800">Add Shift Rule</h2>
-              <p className="text-[11px] text-gray-500 mt-0.5">Create a shift schedule for employees</p>
+          {/* Add / Edit Rule Form */}
+          <form onSubmit={submit} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${editingId !== null ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200'}`}>
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${editingId !== null ? 'bg-amber-50/70 border-amber-100' : 'bg-gray-50/50 border-gray-100'}`}>
+              <div>
+                <h2 className="text-sm font-bold text-gray-800">{editingId !== null ? 'Edit Shift Rule' : 'Add Shift Rule'}</h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">{editingId !== null ? `Editing rule #${editingId} — update times, dates or employee` : 'Create a shift schedule for employees — From/To dates make it apply only for future dates'}</p>
+              </div>
+              {editingId !== null && (
+                <button type="button" onClick={cancelEdit} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                  <X size={12} /> Cancel edit
+                </button>
+              )}
             </div>
 
             <div className="p-6 space-y-5">
@@ -342,12 +400,15 @@ export default function ShiftManagementPage() {
             </div>
 
             {/* Submit */}
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-6 space-y-2">
               <button type="submit" disabled={busy}
-                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm">
-                {busy ? <Loader2 size={15} className="animate-spin" /> : <CalendarPlus size={15} />}
-                {busy ? 'Adding…' : selectedEmps.size > 0 ? `Add Shift Rule for ${selectedEmps.size} Employee${selectedEmps.size > 1 ? 's' : ''}` : 'Add Shift Rule for Whole Device'}
+                className={`w-full px-4 py-3 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm ${editingId !== null ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                {busy ? <Loader2 size={15} className="animate-spin" /> : editingId !== null ? <Pencil size={15} /> : <CalendarPlus size={15} />}
+                {busy ? (editingId !== null ? 'Updating…' : 'Adding…') : editingId !== null ? 'Update Shift Rule' : selectedEmps.size > 0 ? `Add Shift Rule for ${selectedEmps.size} Employee${selectedEmps.size > 1 ? 's' : ''}` : 'Add Shift Rule for Whole Device'}
               </button>
+              {editingId !== null && (
+                <p className="text-[11px] text-amber-600 text-center">Editing rule #{editingId} — From/To dates control future applicability. Leave To empty for open-ended.</p>
+              )}
             </div>
           </form>
 
@@ -409,10 +470,16 @@ export default function ShiftManagementPage() {
                               )}
                             </td>
                             <td className="px-4 py-2.5 text-right">
-                              <button onClick={() => deleteRule(r.id)} disabled={deletingId === r.id}
-                                className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50">
-                                {deletingId === r.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                              </button>
+                              <div className="inline-flex items-center gap-1">
+                                <button onClick={() => startEdit(r)} title="Edit shift / dates / employee"
+                                  className={`p-1.5 rounded-lg transition-colors ${editingId === r.id ? 'bg-amber-100 text-amber-700' : 'hover:bg-blue-50 text-gray-400 hover:text-blue-600'}`}>
+                                  <Pencil size={13} />
+                                </button>
+                                <button onClick={() => deleteRule(r.id)} disabled={deletingId === r.id}
+                                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50">
+                                  {deletingId === r.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
