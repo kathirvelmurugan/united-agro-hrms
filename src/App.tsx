@@ -10,7 +10,6 @@ import AnalyticsPage from './components/AnalyticsPage';
 import AiInsightsPage from './components/AiInsightsPage';
 import PatternsPage from './components/PatternsPage';
 import BackupPage from './components/BackupPage';
-import RosterPage from './components/RosterPage';
 import AdminPage from './components/AdminPage';
 import ServerHealthModal from './components/ServerHealthModal';
 import AdminCommandPalette from './components/AdminCommandPalette';
@@ -27,7 +26,7 @@ const PAGE_KEY = 'ua_page';
 function loadMenu(): MenuKey {
   try {
     const v = sessionStorage.getItem(MENU_KEY);
-    const known: MenuKey[] = ['dashboard', 'employees', 'attendance', 'units', 'activity', 'ai', 'patterns', 'analytics', 'backup', 'roster'];
+    const known: MenuKey[] = ['dashboard', 'employees', 'attendance', 'units', 'activity', 'ai', 'patterns', 'analytics', 'backup'];
     return v && known.includes(v as MenuKey) ? (v as MenuKey) : 'dashboard';
   } catch {
     return 'dashboard';
@@ -140,7 +139,7 @@ export default function App() {
   }
 
   const isManager = user.role !== 'superadmin' && user.role !== 'admin';
-  if (isManager && menu !== 'dashboard' && menu !== 'employees' && menu !== 'roster') {
+  if (isManager && menu !== 'dashboard' && menu !== 'employees') {
     setMenu('dashboard');
     sessionStorage.setItem(MENU_KEY, 'dashboard');
   }
@@ -172,8 +171,6 @@ export default function App() {
     content = <AnalyticsPage />;
   } else if (menu === 'backup') {
     content = <BackupPage />;
-  } else if (menu === 'roster') {
-    content = <RosterPage role={user.role} />;
   } else {
     content = <Placeholder title={pageTitle[menu] ?? 'Module'} />;
   }
