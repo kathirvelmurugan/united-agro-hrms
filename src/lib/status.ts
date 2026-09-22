@@ -81,7 +81,8 @@ export const BRANCH_SHIFTS: Record<string, ShiftWindow> = {
     lunchStart: '13:00', lunchEnd: '13:30',
     employeeShifts: {
       '11': { generalStart: '09:00', generalEnd: '17:30' },   // Renuga
-      '14': { generalStart: '08:00', generalEnd: '19:30' },   // Narayanan
+      '14': { generalStart: '10:00', generalEnd: '18:45' },   // Narayanan
+      '17': { generalStart: '10:00', generalEnd: '18:45' },   // Shankar
       '4':  { generalStart: '12:00', generalEnd: '20:30', lunch: false }, // Muruganagendiran
     },
   },

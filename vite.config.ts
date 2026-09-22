@@ -8,15 +8,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/UA/api': {
-        target: 'https://win.howtostart.in',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/api': {
-        target: 'https://win.howtostart.in/UA',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api'),
+        target: 'http://localhost:5000',
+        rewrite: (path) => path.replace(/^\/UA/, ''),
       },
     },
   },

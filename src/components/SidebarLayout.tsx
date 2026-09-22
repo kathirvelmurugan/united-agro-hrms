@@ -1,4 +1,4 @@
-﻿import { LayoutDashboard, LogOut, Shield, Sparkles, Users, Clock, Building2, Activity, BarChart3, Fingerprint, Radar, Moon, Sun, Database } from 'lucide-react';
+﻿import { LayoutDashboard, LogOut, Shield, Sparkles, Users, Clock, Building2, Activity, BarChart3, Fingerprint, Radar, Moon, Sun, Database, ClipboardList } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export type MenuKey =
@@ -10,7 +10,8 @@ export type MenuKey =
   | 'units'
   | 'activity'
   | 'analytics'
-  | 'backup';
+  | 'backup'
+  | 'roster';
 
 export const MENU_ITEMS: { key: MenuKey; label: string; icon: React.ReactNode }[] = [
   { key: 'ai', label: 'AI Insights', icon: <Sparkles size={18} /> },
@@ -19,6 +20,7 @@ export const MENU_ITEMS: { key: MenuKey; label: string; icon: React.ReactNode }[
   { key: 'employees', label: 'Employees', icon: <Users size={18} /> },
   { key: 'attendance', label: 'Attendance', icon: <Clock size={18} /> },
   { key: 'units', label: 'Units', icon: <Building2 size={18} /> },
+  { key: 'roster', label: 'Unit Roster', icon: <ClipboardList size={18} /> },
   { key: 'activity', label: 'Activity Insights', icon: <Activity size={18} /> },
   { key: 'analytics', label: 'Owner Analytics', icon: <BarChart3 size={18} /> },
   { key: 'backup', label: 'Backup / Export', icon: <Database size={18} /> },
@@ -63,7 +65,7 @@ export default function SidebarLayout({
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {MENU_ITEMS.filter(item => {
             if (role === 'superadmin' || role === 'admin') return true;
-            return item.key === 'dashboard' || item.key === 'employees';
+            return item.key === 'dashboard' || item.key === 'employees' || item.key === 'roster';
           }).map(item => {
             const isActive = active === item.key;
             return (
