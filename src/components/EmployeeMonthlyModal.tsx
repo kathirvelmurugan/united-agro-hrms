@@ -445,7 +445,7 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-2 text-sm text-gray-600">{d.shift ?? '--'}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600">{d.shift === 'General' ? 'G' : (d.shift ?? '--')}</td>
                             <td className="px-4 py-2 text-sm text-gray-600">{d.first ?? '--:--'}</td>
                             <td className="px-4 py-2 text-sm text-gray-600">
                               {(() => {
