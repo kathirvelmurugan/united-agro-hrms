@@ -388,21 +388,21 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
         <aside className="w-56 shrink-0 bg-white border-r border-indigo-100 flex flex-col">
           <div className="p-3 border-b border-indigo-100">
             <p className="text-[11px] font-bold text-indigo-900">Admin Options</p>
-            <p className="text-[10px] text-indigo-500">All settings on left</p>
+            <p className="text-[10px] text-indigo-500"></p>
           </div>
           <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-            <button onClick={() => setAdminTab('employees')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='employees' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 text-indigo-700'}`}>
+            <button onClick={() => setAdminTab('employees')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='employees' ? 'bg-brand-600 text-white' : 'hover:bg-indigo-50 text-indigo-700'}`}>
               <Users size={14}/> Employees <span className="ml-auto text-[10px] opacity-70">{adminEmps.length}</span>
             </button>
-            <button onClick={() => setAdminTab('users')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='users' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 text-indigo-700'}`}>
+            <button onClick={() => setAdminTab('users')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='users' ? 'bg-brand-600 text-white' : 'hover:bg-indigo-50 text-indigo-700'}`}>
               <Shield size={14}/> Users <span className="ml-auto text-[10px] opacity-70">{users.length}</span>
             </button>
-            <button onClick={() => setAdminTab('shifts')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='shifts' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 text-indigo-700'}`}>
+            <button onClick={() => setAdminTab('shifts')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='shifts' ? 'bg-brand-600 text-white' : 'hover:bg-indigo-50 text-indigo-700'}`}>
               <Clock size={14}/> Shift Management <span className="ml-auto text-[10px] opacity-70">{shiftRules.length}</span>
             </button>
           </nav>
           <div className="p-3 border-t border-indigo-100">
-            <p className="text-[9px] text-indigo-400 leading-tight">Shifts support From/To for future dates. Edit & Delete per rule.</p>
+            <p className="text-[9px] text-indigo-400 leading-tight"></p>
           </div>
         </aside>
 
@@ -522,3 +522,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     </div>
   );
 }
+
+
+
+
