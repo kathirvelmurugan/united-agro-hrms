@@ -360,7 +360,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
+    <div className="h-screen overflow-hidden bg-white flex flex-col">
       <motion.header
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -394,7 +394,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
 
       <main className="flex-1 overflow-hidden flex max-w-7xl mx-auto w-full">
         {/* Left Nav - All options on left */}
-        <aside className="w-56 shrink-0 bg-white dark:bg-gray-800 border-r border-indigo-100 dark:border-gray-700 flex flex-col">
+        <aside className="w-56 shrink-0 bg-white border-r border-indigo-100 flex flex-col">
           <div className="p-3 border-b border-indigo-100">
             <p className="text-[11px] font-bold text-indigo-900">Admin Options</p>
             <p className="text-[10px] text-indigo-500"></p>
@@ -415,7 +415,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
           </div>
         </aside>
 
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 p-4">
+        <div className="flex-1 overflow-y-auto bg-white p-4">
           {adminTab === 'employees' && (
             <div className="max-w-3xl mx-auto space-y-3">
               <div className="bg-white rounded-xl border border-indigo-100 p-3">
@@ -531,6 +531,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     </div>
   );
 }
+
 
 
 

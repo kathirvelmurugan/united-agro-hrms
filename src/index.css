@@ -45,12 +45,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-html.dark body { background-color: #0b1220; color: #e2e8f0; }
+html.dark body { background-color: #ffffff; color: #1f2937; }
 html.dark { color-scheme: dark; }
-html.dark .bg-\[\#f0f4f8\] { background-color: #0b1220 !important; }
-html.dark .bg-white { background-color: #0f172a !important; }
-html.dark [class*="bg-gray-50"] { background-color: #1e293b !important; }
-html.dark [class*="bg-gray-100"] { background-color: #24324a !important; }
+html.dark .bg-\[\#f0f4f8\] { background-color: #ffffff !important; }
+html.dark .bg-white { background-color: #ffffff !important; }
+html.dark [class*="bg-gray-50"] { background-color: #f9fafb !important; }
+html.dark [class*="bg-gray-100"] { background-color: #f3f4f6 !important; }
 html.dark .bg-gray-200 { background-color: #334155 !important; }
 html.dark .bg-gray-300 { background-color: #475569 !important; }
 html.dark .bg-gray-400 { background-color: #64748b !important; }
@@ -75,9 +75,9 @@ html.dark .border-gray-50, html.dark .border-gray-100, html.dark .border-gray-20
 html.dark [class*="divide-gray-"] > :not([hidden]) ~ :not([hidden]) { border-color: #1e293b !important; }
 html.dark ::placeholder { color: #64748b !important; }
 
-html.dark .text-black, html.dark .text-gray-900 { color: #f1f5f9 !important; }
-html.dark .text-gray-800 { color: #e2e8f0 !important; }
-html.dark .text-gray-700 { color: #cbd5e1 !important; }
+html.dark .text-black, html.dark .text-gray-900 { color: #111827 !important; }
+html.dark .text-gray-800 { color: #1f2937 !important; }
+html.dark .text-gray-700 { color: #374151 !important; }
 html.dark .text-gray-600, html.dark .text-gray-500 { color: #94a3b8 !important; }
 html.dark .text-gray-400 { color: #94a3b8 !important; }
 html.dark .text-gray-300 { color: #9ca3af !important; }
