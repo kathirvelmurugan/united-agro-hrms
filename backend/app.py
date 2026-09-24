@@ -4660,7 +4660,7 @@ def api_rules_set():
                 datetime.strptime(end_t, "%H:%M")
             except (ValueError, TypeError):
                 return jsonify({"error": "start_time/end_time must be HH:MM"}), 400
-            
+
             empid = body.get("empid")
             empid_v = None
             if empid not in (None, "", 0):
@@ -4668,30 +4668,30 @@ def api_rules_set():
                     empid_v = int(empid)
                 except (TypeError, ValueError):
                     return jsonify({"error": "empid must be numeric"}), 400
-            
+
             start_date = body.get("start_date")
             end_date = body.get("end_date")
             weekdays = body.get("weekdays")
-            
+
             if start_date:
                 try:
                     datetime.strptime(start_date, "%Y-%m-%d")
                 except (ValueError, TypeError):
                     return jsonify({"error": "start_date must be YYYY-MM-DD"}), 400
-            
+
             if end_date:
                 try:
                     datetime.strptime(end_date, "%Y-%m-%d")
                 except (ValueError, TypeError):
                     return jsonify({"error": "end_date must be YYYY-MM-DD"}), 400
-            
+
             if weekdays is not None:
                 if not isinstance(weekdays, list) or not all(isinstance(d, int) and 0 <= d <= 6 for d in weekdays):
                     return jsonify({"error": "weekdays must be a list of integers 0-6"}), 400
                 weekdays_str = ",".join(str(d) for d in weekdays)
             else:
                 weekdays_str = None
-            
+
             cur.execute("""
                 INSERT INTO AttendanceRules (DeviceId, RuleType, Name, StartTime, EndTime, EmpId, StartDate, EndDate, WeekDays)
                 VALUES (?, 'shift', ?, ?, ?, ?, ?, ?, ?)
