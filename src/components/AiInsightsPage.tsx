@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Sparkles, RefreshCw, Clock4, LogOut, ClipboardX, FastForward, UtensilsCrossed, AlertTriangle, ShieldAlert, Bot, X, Activity, CalendarX, AlarmClock, Hourglass, Building2, Users, ChevronDown } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import { useChat } from './AiChat';
 
 interface Anomaly {
@@ -113,7 +114,7 @@ export default function AiInsightsPage() {
 
   async function fetchData() {
     try {
-      const r = await fetch(`${API_URL}/api/ai-insights`);
+      const r = await authFetch(`${API_URL}/api/ai-insights`);
       if (r.ok) setData(await r.json());
     } catch { /* ignore */ }
     setLoading(false);

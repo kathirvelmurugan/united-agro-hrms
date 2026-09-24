@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 
 interface AdminPageProps {
   label: string;
@@ -107,7 +108,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   const fetchAdminEmps = useCallback(async () => {
     setAdminEmpLoading(true);
     try {
-      const r = await fetch(`${API_URL}/api/admin/employees?key=admin123`);
+      const r = await authFetch(`${API_URL}/api/admin/employees`);
       if (r.ok) {
         const d = await r.json();
         setAdminEmps(d.employees || []);
@@ -132,7 +133,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     if (!confirm(`Delete employee "${name}" (#${empid})?`)) return;
     setDeletingEmpId(empid);
     try {
-      const r = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid }) });
+      const r = await authFetch(`${API_URL}/api/admin/employee`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid }) });
       const d = await r.json().catch(() => ({} as any));
       if (r.ok) { setAdminEmpMsg({ type: 'ok', text: `"${name}" deleted` }); fetchAdminEmps(); }
       else setAdminEmpMsg({ type: 'err', text: (d as any).error || 'Delete failed' });
@@ -144,9 +145,9 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     e.preventDefault();
     if (editingEmpId == null) return;
     try {
-      const del = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid: editingEmpId }) });
+      const del = await authFetch(`${API_URL}/api/admin/employee`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid: editingEmpId }) });
       if (!del.ok) { const dj = await del.json().catch(() => ({} as any)); setAdminEmpMsg({ type: 'err', text: (dj as any).error || 'Delete failed' }); return; }
-      const add = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editEmpForm.name.trim(), badge: editEmpForm.badge.trim(), empid: editingEmpId, device_id: editEmpForm.device_id }) });
+      const add = await authFetch(`${API_URL}/api/admin/employee`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editEmpForm.name.trim(), badge: editEmpForm.badge.trim(), empid: editingEmpId, device_id: editEmpForm.device_id }) });
       const aj = await add.json().catch(() => ({} as any));
       if (add.ok) { setAdminEmpMsg({ type: 'ok', text: `Updated "${editEmpForm.name}"` }); setEditingEmpId(null); fetchAdminEmps(); }
       else { setAdminEmpMsg({ type: 'err', text: (aj as any).error || 'Re-create failed' }); fetchAdminEmps(); }
@@ -158,7 +159,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     try {
       const body: any = { name: addEmpForm.name.trim(), badge: addEmpForm.badge.trim(), device_id: addEmpForm.device_id };
       if (addEmpForm.empid.trim()) body.empid = parseInt(addEmpForm.empid.trim());
-      const r = await fetch(`${API_URL}/api/admin/employee?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const r = await authFetch(`${API_URL}/api/admin/employee`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({} as any));
       if (r.ok) { setAdminEmpMsg({ type: 'ok', text: `Added "${addEmpForm.name}"` }); setAddEmpForm({ name: '', badge: '', device_id: addEmpForm.device_id, empid: '' }); fetchAdminEmps(); }
       else setAdminEmpMsg({ type: 'err', text: (d as any).error || 'Failed to add' });
@@ -167,7 +168,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
 
   async function fetchUsers() {
     try {
-      const r = await fetch(`${API_URL}/api/users?key=admin123`);
+      const r = await authFetch(`${API_URL}/api/users`);
       if (r.ok) setUsers(await r.json());
     } catch { /* ignore */ }
     setLoading(false);
@@ -175,7 +176,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
 
   async function fetchLocations() {
     try {
-      const r = await fetch(`${API_URL}/api/locations`);
+      const r = await authFetch(`${API_URL}/api/locations`);
       if (r.ok) {
         const list: LocationOption[] = await r.json();
         setLocations(list);
@@ -191,7 +192,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
 
   // Shift management functions
   const loadShiftRules = useCallback(() => {
-    fetch(`${API_URL}/api/rules?key=admin123`)
+    authFetch(`${API_URL}/api/rules`)
       .then(r => r.ok ? r.json() : { rules: [] })
       .then((d: any) => setShiftRules((d.rules || []).filter((r: any) => r.type === 'shift' && r.device_id === shiftDevice)))
       .catch(() => setShiftRules([]));
@@ -200,7 +201,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   useEffect(() => {
     if (adminTab !== 'shifts' || !shiftDevice) return;
     setEmpList([]); setSelectedEmps(new Set()); setEmpSearch('');
-    fetch(`${API_URL}/api/admin/employees?key=admin123`)
+    authFetch(`${API_URL}/api/admin/employees`)
       .then(r => r.ok ? r.json() : { employees: [] })
       .then((d: any) => {
         const unique = new Map<number, any>();
@@ -249,7 +250,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
       if (editingShiftId !== null) {
         const empidForEdit = selectedEmps.size === 1 ? Array.from(selectedEmps)[0] : (selectedEmps.size === 0 ? null : Array.from(selectedEmps)[0]);
         const body: any = { id: editingShiftId, device_id: shiftDevice, type: 'shift', name: null, start_time: startTime, end_time: endTime, empid: empidForEdit, start_date: startDate || null, end_date: endDate || null };
-        const r = await fetch(`${API_URL}/api/rules?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const r = await authFetch(`${API_URL}/api/rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const d = await r.json().catch(() => ({} as any));
         if (r.ok) {
           setShiftMsg({ type: 'ok', text: 'Rule updated' });
@@ -262,7 +263,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
         ? ids.map(empid => ({ device_id: shiftDevice, type: 'shift', name: null, start_time: startTime, end_time: endTime, empid, start_date: startDate || null, end_date: endDate || null }))
         : [{ device_id: shiftDevice, type: 'shift', name: null, start_time: startTime, end_time: endTime, start_date: startDate || null, end_date: endDate || null }];
       let ok = 0, fail = 0;
-      for (const b of bodies) { try { const r = await fetch(`${API_URL}/api/rules?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); r.ok ? ok++ : fail++; } catch { fail++; } }
+      for (const b of bodies) { try { const r = await authFetch(`${API_URL}/api/rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); r.ok ? ok++ : fail++; } catch { fail++; } }
       setShiftMsg(ok > 0 && fail === 0 ? { type: 'ok', text: `Rule added for ${ok} employee${ok > 1 ? 's' : ''}` } : { type: 'err', text: `${ok} succeeded, ${fail} failed` });
       if (ok > 0) { setSelectedEmps(new Set()); loadShiftRules(); }
     } catch { setShiftMsg({ type: 'err', text: 'Failed' }); } finally { setShiftBusy(false); }
@@ -270,7 +271,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
 
   async function deleteShiftRule(id: number) {
     setDeletingRuleId(id);
-    try { const r = await fetch(`${API_URL}/api/rules/delete?key=admin123`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); if (r.ok) setShiftRules(p => p.filter(r => r.id !== id)); } catch {}
+    try { const r = await authFetch(`${API_URL}/api/rules/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); if (r.ok) setShiftRules(p => p.filter(r => r.id !== id)); } catch {}
     setDeletingRuleId(null);
   }
 
@@ -282,7 +283,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     e.preventDefault();
     setMsg('');
     try {
-      const r = await fetch(`${API_URL}/api/users?key=admin123`, {
+      const r = await authFetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: form.email, password: form.password, label: form.label, role: form.role, device_id: form.device_id }),
@@ -306,7 +307,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   async function handleDelete(username: string) {
     if (!confirm(`Delete user "${username}"?`)) return;
     try {
-      const r = await fetch(`${API_URL}/api/users/${encodeURIComponent(username)}?key=admin123`, { method: 'DELETE' });
+      const r = await authFetch(`${API_URL}/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
       const d = await r.json();
       if (r.ok) {
         setMsg(d.success);
@@ -333,7 +334,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
     try {
       const body: any = { label: editForm.label, role: editForm.role, device_id: editForm.device_id };
       if (editForm.password.trim()) body.password = editForm.password;
-      const r = await fetch(`${API_URL}/api/users/${encodeURIComponent(editingUser)}?key=admin123`, {
+      const r = await authFetch(`${API_URL}/api/users/${encodeURIComponent(editingUser)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

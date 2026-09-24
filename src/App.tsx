@@ -16,8 +16,18 @@ import AdminCommandPalette from './components/AdminCommandPalette';
 import SidebarLayout, { type MenuKey } from './components/SidebarLayout';
 import { AiChatProvider } from './components/AiChat';
 import { Construction } from 'lucide-react';
+import { API_URL } from './data/mockData';
+import { authFetch } from './lib/auth';
 
 type Page = 'login' | 'admin';
+
+interface SessionUser {
+  username: string;
+  role: string;
+  label: string;
+  deviceId: number | null;
+  token: string;
+}
 
 const STORAGE_KEY = 'ua_session_user';
 const MENU_KEY = 'ua_menu';
@@ -42,12 +52,21 @@ function loadPage(): Page {
   }
 }
 
-function loadUser() {
+function loadUser(): SessionUser | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const u = JSON.parse(raw);
-    return u && u.username ? u : null;
+    const user: unknown = JSON.parse(raw);
+    if (!user || typeof user !== 'object') return null;
+    const session = user as Record<string, unknown>;
+    if (typeof session.username !== 'string' || typeof session.role !== 'string' || typeof session.label !== 'string' || (session.deviceId !== null && typeof session.deviceId !== 'number') || typeof session.token !== 'string') return null;
+    return {
+      username: session.username,
+      role: session.role,
+      label: session.label,
+      deviceId: session.deviceId,
+      token: session.token,
+    };
   } catch {
     return null;
   }
@@ -69,7 +88,7 @@ function Placeholder({ title }: { title: string }) {
 
 export default function App() {
   const [page, setPage] = useState<Page>(loadPage);
-  const [user, setUser] = useState<{ username: string; role: string; label: string; deviceId: number | null } | null>(loadUser);
+  const [user, setUser] = useState<SessionUser | null>(loadUser);
   const [statusFilter, setStatusFilter] = useState('all');
   const [menu, setMenu] = useState<MenuKey>(loadMenu);
   const [healthOpen, setHealthOpen] = useState(false);
@@ -96,8 +115,18 @@ export default function App() {
         }
       }
     }
+    function onAuthExpired() {
+      setUser(null);
+      localStorage.removeItem(STORAGE_KEY);
+      setPage('login');
+      sessionStorage.setItem(PAGE_KEY, 'login');
+    }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('ua-auth-expired', onAuthExpired);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('ua-auth-expired', onAuthExpired);
+    };
   }, []);
 
   function handleNavigate(next: MenuKey) {
@@ -105,8 +134,8 @@ export default function App() {
     sessionStorage.setItem(MENU_KEY, next);
   }
 
-  function handleLogin(username: string, role: string, label: string, deviceId: number | null) {
-    const next = { username, role, label, deviceId };
+  function handleLogin(username: string, role: string, label: string, deviceId: number | null, token: string) {
+    const next = { username, role, label, deviceId, token };
     setUser(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setStatusFilter('all');
@@ -116,6 +145,7 @@ export default function App() {
   }
 
   function handleLogout() {
+    void authFetch(`${API_URL}/api/logout`, { method: 'POST' }).catch(() => undefined);
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
     setPage('login');

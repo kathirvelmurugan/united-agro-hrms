@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Activity, Cpu, MemoryStick, Database, RefreshCw, Server, ChevronDown, ChevronUp } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 
 interface HealthData {
   server_time: string;
@@ -39,7 +40,7 @@ export default function ServerHealthModal({ open, onClose }: { open: boolean; on
     let alive = true;
     async function load() {
       try {
-        const r = await fetch(`${API_URL}/api/server/health`);
+        const r = await authFetch(`${API_URL}/api/server/health`);
         if (r.ok) {
           const j = await r.json();
           if (alive) { setData(j); setError(null); setLastFetch(Date.now()); }

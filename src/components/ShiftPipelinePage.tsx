@@ -3,6 +3,7 @@ import {
   Search, Clock, X, Target, RefreshCw
 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 
 const UNITS = [
   { id: 0, name: 'All Units', short: 'ALL' },
@@ -117,7 +118,7 @@ export default function ShiftPipelinePage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const liveRes = await fetch(`${API_URL}/api/live/all`);
+      const liveRes = await authFetch(`${API_URL}/api/live/all`);
       const liveData = await liveRes.json();
 
       const empList: ShiftEmployee[] = [];
@@ -159,7 +160,7 @@ export default function ShiftPipelinePage() {
         const batch = empList.slice(i, i + batchSize);
         await Promise.all(batch.map(async (emp) => {
           try {
-            const r = await fetch(`${API_URL}/api/employee/monthly?device_id=${emp.device_id}&id=${encodeURIComponent(emp.id)}&days=31&month=${month}`);
+            const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${emp.device_id}&id=${encodeURIComponent(emp.id)}&days=31&month=${month}`);
             const d = await r.json();
             const latest = d.months?.[d.months.length - 1];
             const today = new Date().toISOString().slice(0, 10);

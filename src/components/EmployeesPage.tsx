@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { Users, Search, Clock, Building2, ChevronRight } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import { deriveStatus, STATUS_META } from '../lib/status';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 
@@ -34,7 +35,7 @@ export default function EmployeesPage({ title = 'Employees', deviceId = null }: 
   async function fetchData() {
     try {
       const url = deviceId ? `${API_URL}/api/live/${deviceId}` : `${API_URL}/api/live/all`;
-      const r = await fetch(url);
+      const r = await authFetch(url);
       if (r.ok) {
         const d = await r.json();
         let liveData: AllLiveData;
@@ -80,7 +81,7 @@ export default function EmployeesPage({ title = 'Employees', deviceId = null }: 
         });
         try {
           const today = new Date().toISOString().slice(0, 10);
-          const er = await fetch(`${API_URL}/api/export/punches?from=${today}&to=${today}`);
+          const er = await authFetch(`${API_URL}/api/export/punches?from=${today}&to=${today}`);
           if (er.ok) {
             const ej = await er.json();
             const existing = new Set(liveData.employees.map(e => `${e.branch}|${e.id}`));

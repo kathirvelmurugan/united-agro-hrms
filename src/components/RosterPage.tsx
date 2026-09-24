@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Users, Search, Plus, Pencil, Trash2, RefreshCw, CheckCircle2, AlertTriangle, Clock3, Database } from 'lucide-react';
 import { API_URL } from '../data/mockData';
-
-const ADMIN_KEY = 'admin123';
+import { authFetch } from '../lib/auth';
 
 export const ROSTER_UNITS = [58, 42, 59, 23, 25, 24];
 
@@ -54,8 +53,8 @@ export default function RosterPage({ role }: { role: string }) {
     setLoading(true);
     try {
       const [u, r] = await Promise.all([
-        fetch(`${API_URL}/api/locations`).then(x => (x.ok ? x.json() : [])).catch(() => []),
-        fetch(`${API_URL}/api/roster`).then(x => (x.ok ? x.json() : null)).catch(() => null),
+        authFetch(`${API_URL}/api/locations`).then(x => (x.ok ? x.json() : [])).catch(() => []),
+        authFetch(`${API_URL}/api/roster`).then(x => (x.ok ? x.json() : null)).catch(() => null),
       ]);
       if (Array.isArray(u) && u.length) setUnits(u);
       if (r && Array.isArray(r.roster)) {
@@ -110,7 +109,7 @@ export default function RosterPage({ role }: { role: string }) {
         name: formName.trim(),
       };
       if (editing) body.id = editing.id;
-      const r = await fetch(`${API_URL}/api/roster?key=${ADMIN_KEY}`, {
+      const r = await authFetch(`${API_URL}/api/roster`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -130,7 +129,7 @@ export default function RosterPage({ role }: { role: string }) {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await fetch(`${API_URL}/api/roster?key=${ADMIN_KEY}`, {
+      const r = await authFetch(`${API_URL}/api/roster`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: row.id, device_id: toDevice, code: row.code, name: row.name }),
@@ -149,7 +148,7 @@ export default function RosterPage({ role }: { role: string }) {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await fetch(`${API_URL}/api/roster?key=${ADMIN_KEY}`, {
+      const r = await authFetch(`${API_URL}/api/roster`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: row.id }),
@@ -168,7 +167,7 @@ export default function RosterPage({ role }: { role: string }) {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await fetch(`${API_URL}/api/roster/seed?key=${ADMIN_KEY}`, { method: 'POST' });
+      const r = await authFetch(`${API_URL}/api/roster/seed`, { method: 'POST' });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setMsg(d.error || 'Seed failed'); return; }
       await fetchAll();

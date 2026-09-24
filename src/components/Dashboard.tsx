@@ -2,6 +2,7 @@
 import EmployeeCard from './EmployeeCard';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 import { API_URL, DEVICE_ID } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import type { LiveData } from '../types';
 import { getDetailedStatus } from '../data/attendanceUtils';
 import { timeAgoText } from '../lib/status';
@@ -57,7 +58,7 @@ export default function Dashboard({ role, deviceId, statusFilter = 'all', onFilt
   }
 
   async function fetchAllData() {
-    const r = await fetch(`${API_URL}/api/live/all`);
+    const r = await authFetch(`${API_URL}/api/live/all`);
     if (!r.ok) throw new Error('Failed to fetch data');
     return r.json();
   }
@@ -95,7 +96,7 @@ export default function Dashboard({ role, deviceId, statusFilter = 'all', onFilt
 
   async function fetchLocations() {
     try {
-      const r = await fetch(`${API_URL}/api/locations`);
+      const r = await authFetch(`${API_URL}/api/locations`);
       if (r.ok) {
         const list: LocationOption[] = await r.json();
         setLocations(list);
@@ -113,7 +114,7 @@ export default function Dashboard({ role, deviceId, statusFilter = 'all', onFilt
   async function fetchData() {
     const dev = activeDevice ?? DEVICE_ID;
     try {
-      const r = await fetch(`${API_URL}/api/live/${dev}`);
+      const r = await authFetch(`${API_URL}/api/live/${dev}`);
       if (r.ok) {
         const d = await r.json();
         const fixLast = (e: any) => {

@@ -3,8 +3,7 @@ import {
   Search, Clock, Target, RefreshCw, CalendarPlus, Trash2, Loader2, AlertCircle, ChevronDown, ChevronUp, Pencil, X
 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
-
-const ADMIN_KEY = 'admin123';
+import { authFetch } from '../lib/auth';
 
 interface Loc {
   device_id: number;
@@ -61,7 +60,7 @@ export default function ShiftManagementPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/locations`)
+    authFetch(`${API_URL}/api/locations`)
       .then(r => r.ok ? r.json() : [])
       .then((l: Loc[]) => { setLocs(l); if (l.length > 0) setDevice(l[0].device_id); })
       .catch(() => setLocs([]));
@@ -72,7 +71,7 @@ export default function ShiftManagementPage() {
     setEmpList([]);
     setSelectedEmps(new Set());
     setEmpSearch('');
-    fetch(`${API_URL}/api/admin/employees?key=${ADMIN_KEY}`)
+    authFetch(`${API_URL}/api/admin/employees`)
       .then(r => r.ok ? r.json() : { employees: [] })
       .then((d: any) => {
         const devEmps = (d.employees || []).filter((e: any) => e.device_id === device && e.name && !/^\d+$/.test(e.name.trim()));
@@ -96,7 +95,7 @@ export default function ShiftManagementPage() {
   const loadRules = useCallback(() => {
     if (!device) return;
     setLoadingRules(true);
-    fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`)
+    authFetch(`${API_URL}/api/rules`)
       .then(r => r.ok ? r.json() : { rules: [] })
       .then((d: any) => {
         const shiftRules = (d.rules || []).filter((r: any) => r.type === 'shift' && r.device_id === device);
@@ -170,7 +169,7 @@ export default function ShiftManagementPage() {
           start_time: startTime, end_time: endTime, empid: empidForEdit,
           start_date: startDate || null, end_date: endDate || null,
         };
-        const r = await fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`, {
+        const r = await authFetch(`${API_URL}/api/rules`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -201,7 +200,7 @@ export default function ShiftManagementPage() {
       let failCount = 0;
       for (const body of bodies) {
         try {
-          const r = await fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`, {
+          const r = await authFetch(`${API_URL}/api/rules`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -228,7 +227,7 @@ export default function ShiftManagementPage() {
   async function deleteRule(id: number) {
     setDeletingId(id);
     try {
-      const r = await fetch(`${API_URL}/api/rules/delete?key=${ADMIN_KEY}`, {
+      const r = await authFetch(`${API_URL}/api/rules/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

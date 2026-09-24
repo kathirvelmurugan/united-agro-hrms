@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { Activity, TrendingDown, AlarmClock, Users, Building2 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import { parsePunchTime, isLate, lateInfo } from '../lib/status';
 
 interface CombinedEmployee {
@@ -36,7 +37,7 @@ export default function ActivityInsightsPage() {
 
   async function fetchData() {
     try {
-      const r = await fetch(`${API_URL}/api/live/all`);
+      const r = await authFetch(`${API_URL}/api/live/all`);
       if (r.ok) setData(await r.json());
     } catch { /* ignore */ }
   }

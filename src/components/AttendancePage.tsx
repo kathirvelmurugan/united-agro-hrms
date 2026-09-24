@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { Clock, Building2, Search, CheckCircle2, LogIn, LogOut, CalendarDays, Loader2 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 
 interface CombinedEmployee {
   id: string;
@@ -37,7 +38,7 @@ export default function AttendancePage() {
 
   async function fetchToday() {
     try {
-      const r = await fetch(`${API_URL}/api/live/all`);
+      const r = await authFetch(`${API_URL}/api/live/all`);
       if (r.ok) setData(await r.json());
     } catch { /* ignore */ }
   }
@@ -45,7 +46,7 @@ export default function AttendancePage() {
   async function fetchDay(date: string) {
     try {
       setIsLoading(true);
-      const r = await fetch(`${API_URL}/api/export/punches?from=${date}&to=${date}`);
+      const r = await authFetch(`${API_URL}/api/export/punches?from=${date}&to=${date}`);
       if (r.ok) {
         const j = await r.json();
         const rows: { id: string; name: string; branch: string; punches: string[]; punchDirs: string[] }[] = j.rows ?? [];

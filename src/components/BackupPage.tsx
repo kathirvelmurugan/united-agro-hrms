@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Database, FileSpreadsheet, Download, ShieldCheck, Loader2, HardDriveDownload } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 
 function fmt(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -86,14 +87,14 @@ export default function BackupPage() {
   }
 
   async function fetchAll(): Promise<AllLiveData> {
-    const r = await fetch(`${API_URL}/api/live/all`);
+    const r = await authFetch(`${API_URL}/api/live/all`);
     if (!r.ok) throw new Error('Failed to fetch data');
     return r.json();
   }
 
   async function fetchBackups() {
     try {
-      const r = await fetch(`${API_URL}/api/backup`);
+      const r = await authFetch(`${API_URL}/api/backup`);
       if (r.ok) setBackups((await r.json()).backups ?? []);
     } catch { /* ignore */ }
   }
@@ -103,7 +104,7 @@ export default function BackupPage() {
     try {
       const from = range === 'custom' ? fromDate : range === 'week' ? startOfWeekISO() : range === 'month' ? startOfMonthISO() : todayISO();
       const to = toDate || todayISO();
-      const r = await fetch(`${API_URL}/api/export/punches?from=${from}&to=${to}`);
+      const r = await authFetch(`${API_URL}/api/export/punches?from=${from}&to=${to}`);
       if (!r.ok) throw new Error('Failed to fetch range data');
       const d = await r.json();
       const header = 'Date,EmpID,Name,Branch,Status,FirstPunch,LastPunch,Hours,PunchCount,Punches';
@@ -129,17 +130,16 @@ export default function BackupPage() {
     setBusy(null);
   }
 
-  function downloadSql(name: string) {
-    const a = document.createElement('a');
-    a.href = `${API_URL}/api/backup/download/${encodeURIComponent(name)}`;
-    a.download = name;
-    a.click();
+  async function downloadSql(name: string) {
+    const r = await authFetch(`${API_URL}/api/backup/download/${encodeURIComponent(name)}`);
+    if (!r.ok) throw new Error('Failed to download backup');
+    downloadBlob(await r.blob(), name);
   }
 
   async function createSQLBackup() {
     setBusy('sql');
     try {
-      const r = await fetch(`${API_URL}/api/backup/create`, { method: 'POST' });
+      const r = await authFetch(`${API_URL}/api/backup/create`, { method: 'POST' });
       const d = await r.json();
       if (!d.success) {
         alert(`SQL backup failed: ${d.error || 'unknown error'}`);
@@ -147,7 +147,7 @@ export default function BackupPage() {
         return;
       }
       fetchBackups();
-      downloadSql(d.name);
+      await downloadSql(d.name);
     } catch {
       alert('SQL backup failed - could not connect');
     }
@@ -296,7 +296,7 @@ export default function BackupPage() {
                               </span>
                             </td>
                             <td className="px-3 py-2 text-right">
-                              <button onClick={() => downloadSql(b.name)}
+                              <button onClick={() => { void downloadSql(b.name).catch(() => alert('SQL download failed')); }}
                                 className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800">
                                 <Download size={11} /> Download
                               </button>

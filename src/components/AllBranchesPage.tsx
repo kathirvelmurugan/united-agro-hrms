@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useMemo, useRef } from 'react';
 import { Users, Wifi, WifiOff, Clock4, RefreshCw, CalendarDays, Table2, AlertTriangle, X, Trash2, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 import { deriveStatus, workingSeconds, formatDuration, parsePunchTime, STATUS_META, STATUS_ORDER, shiftForBranch, timeAgoText, fmtPunch, type EmpStatus } from '../lib/status';
 
@@ -133,7 +134,7 @@ export default function AllBranchesPage() {
     setSummaryLoading(true);
     const devId = dataRef.current?.branches.find(b => b.name === selectedBranch)?.device_id ?? '';
     const url = `${API_URL}/api/monthly/summary?month=${summaryMonth}${devId ? `&device_id=${devId}` : ''}`;
-    fetch(url)
+    authFetch(url)
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled) setSummaryData(d ? d.rows : null); })
       .catch(() => { if (!cancelled) setSummaryData(null); })
@@ -143,7 +144,7 @@ export default function AllBranchesPage() {
 
   async function fetchData() {
     try {
-      const r = await fetch(`${API_URL}/api/live/all`);
+      const r = await authFetch(`${API_URL}/api/live/all`);
       if (r.ok) setData(await r.json());
     } catch { /* ignore */ }
   }
@@ -158,7 +159,7 @@ export default function AllBranchesPage() {
     setSchedEditPattern(r.schedule_pattern ?? '');
     setSchedEditStart('');
     if (r.schedule_pattern) {
-      fetch(`${API_URL}/api/schedule?device_id=${r.device_id}&id=${encodeURIComponent(r.id)}`)
+      authFetch(`${API_URL}/api/schedule?device_id=${r.device_id}&id=${encodeURIComponent(r.id)}`)
         .then(res => (res.ok ? res.json() : null))
         .then(d => { if (d?.start) setSchedEditStart(d.start); })
         .catch(() => {});
@@ -168,7 +169,7 @@ export default function AllBranchesPage() {
   async function saveSchedule(r: MonthlyRow) {
     setSchedSaving(true);
     try {
-      const res = await fetch(`${API_URL}/api/schedule?device_id=${r.device_id}&id=${encodeURIComponent(r.id)}`, {
+      const res = await authFetch(`${API_URL}/api/schedule?device_id=${r.device_id}&id=${encodeURIComponent(r.id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pattern: schedEditPattern.trim(), start: schedEditStart.trim() }),
@@ -190,7 +191,7 @@ export default function AllBranchesPage() {
     const devId = dataRef.current?.branches.find(b => b.name === selectedBranch)?.device_id ?? '';
     const url = `${API_URL}/api/monthly/summary?month=${summaryMonth}${devId ? `&device_id=${devId}` : ''}`;
     try {
-      const r = await fetch(url);
+      const r = await authFetch(url);
       if (r.ok) {
         const d = await r.json();
         setSummaryData(d.rows);
@@ -738,7 +739,7 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`)
+    authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setRules(d.rules ?? []); })
       .catch(() => {});
@@ -753,7 +754,7 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
       if (type === 'weekly_off') body.day_of_week = dow;
       else body.date = date;
       if (type === 'permission') body.hours = parseFloat(hours) || 2;
-      const r = await fetch(`${API_URL}/api/rules`, {
+      const r = await authFetch(`${API_URL}/api/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -761,7 +762,7 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { alert(j.error || 'Failed to save rule'); return; }
       setName(''); setHours('2'); setDate('');
-      const resp = await fetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`);
+      const resp = await authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`);
       const dj = await resp.json().catch(() => ({ rules: [] }));
       setRules(dj.rules ?? []);
       onSaved();
@@ -774,7 +775,7 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
 
   async function deleteRule(id: number) {
     try {
-      await fetch(`${API_URL}/api/rules/delete`, {
+      await authFetch(`${API_URL}/api/rules/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
@@ -923,7 +924,7 @@ function CalendarModal({ branches, month, onClose }: CalendarModalProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/api/rules`)
+    authFetch(`${API_URL}/api/rules`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (cancelled || !d) return;

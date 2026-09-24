@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bot, User, Send, X, Maximize2, Minimize2, Sparkles, ChevronDown } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import { deriveStatus, lateInfo, workingSeconds, formatDuration, parsePunchTime, type Statusable } from '../lib/status';
 
 interface Anomaly {
@@ -166,7 +167,7 @@ export function AiChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!open || facts || factsLoading) return;
     setFactsLoading(true);
-    fetch(`${API_URL}/api/ai/facts`)
+    authFetch(`${API_URL}/api/ai/facts`)
       .then(r => (r.ok ? r.json() : null))
       .then(j => {
         if (j && !j.fallback) {
@@ -181,9 +182,9 @@ export function AiChatProvider({ children }: { children: ReactNode }) {
   async function fetchData() {
     try {
       const [ar, lr, yr] = await Promise.all([
-        fetch(`${API_URL}/api/ai-insights`),
-        fetch(`${API_URL}/api/live/all`),
-        fetch(`${API_URL}/api/analytics`),
+        authFetch(`${API_URL}/api/ai-insights`),
+        authFetch(`${API_URL}/api/live/all`),
+        authFetch(`${API_URL}/api/analytics`),
       ]);
       if (ar.ok) setData(await ar.json());
       if (lr.ok) setLive(await lr.json());
@@ -235,7 +236,7 @@ export function AiChatProvider({ children }: { children: ReactNode }) {
     const pd = resolvePastDay(q);
     if (!pd) return null;
     try {
-      const r = await fetch(`${API_URL}/api/day?date=${pd.date}`);
+      const r = await authFetch(`${API_URL}/api/day?date=${pd.date}`);
       if (!r.ok) return null;
       const s = await r.json();
       if (!s || Array.isArray(s)) return null;
@@ -446,7 +447,7 @@ export function AiChatProvider({ children }: { children: ReactNode }) {
     if (local !== NO_LOCAL_MATCH) return local;
     // 2) Custom / unknown question -> free-form Gemini (can answer anything about HRMS)
     try {
-      const r = await fetch(`${API_URL}/api/chat`, {
+      const r = await authFetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),
@@ -458,7 +459,7 @@ export function AiChatProvider({ children }: { children: ReactNode }) {
     } catch { /* fall through */ }
     // 3) Structured query as a last attempt for built-in style questions
     try {
-      const r = await fetch(`${API_URL}/api/ai/query`, {
+      const r = await authFetch(`${API_URL}/api/ai/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),

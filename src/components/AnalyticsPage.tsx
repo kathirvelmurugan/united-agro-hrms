@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { BarChart3, Flame, CalendarClock, Clock4, Trophy, TrendingUp, RefreshCw } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 
 interface EmployeeStats {
@@ -90,7 +91,7 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`${API_URL}/api/analytics`);
+      const r = await authFetch(`${API_URL}/api/analytics`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setData(await r.json());
     } catch (err) {

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { X, CalendarDays, CheckCircle2, AlertTriangle, XCircle, Clock4, Timer, User, Link2, Download } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import { shiftForEmployee, shiftSeconds } from '../lib/status';
 
 export interface EmployeeRef {
@@ -131,7 +132,7 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
     setLoading(true);
     setError(null);
     setMonth('');
-    fetch(`${API_URL}/api/employee/monthly?device_id=${employee.device_id}&id=${encodeURIComponent(employee.id)}`)
+    authFetch(`${API_URL}/api/employee/monthly?device_id=${employee.device_id}&id=${encodeURIComponent(employee.id)}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

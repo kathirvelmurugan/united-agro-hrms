@@ -5,8 +5,7 @@ import {
   CheckCircle2, ShieldCheck,
 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
-
-const ADMIN_KEY = 'admin123';
+import { authFetch } from '../lib/auth';
 
 interface Loc {
   device_id: number;
@@ -31,7 +30,7 @@ export default function AdminCommandPalette({ open, onClose, onCheckServer }: Pr
     if (!open) return;
     setView('root');
     setQuery('');
-    fetch(`${API_URL}/api/locations`)
+    authFetch(`${API_URL}/api/locations`)
       .then(r => r.ok ? r.json() : [])
       .then((l: Loc[]) => setLocs(l))
       .catch(() => setLocs([]));
@@ -158,7 +157,7 @@ function EmployeeForm({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
     }
     setBusy(true);
     try {
-      const r = await fetch(`${API_URL}/api/admin/employee?key=${ADMIN_KEY}`, {
+      const r = await authFetch(`${API_URL}/api/admin/employee`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,7 +246,7 @@ function EmployeeManager({ onBack, onAdd }: { onBack: () => void; onAdd: () => v
 
   async function load() {
     try {
-      const r = await fetch(`${API_URL}/api/admin/employees?key=${ADMIN_KEY}`);
+      const r = await authFetch(`${API_URL}/api/admin/employees`);
       const d = await r.json();
       if (r.ok) setList(d.employees || []);
       else setMsg({ type: 'err', text: d.error || 'Failed to load employees' });
@@ -262,7 +261,7 @@ function EmployeeManager({ onBack, onAdd }: { onBack: () => void; onAdd: () => v
     setBusy(true);
     setMsg(null);
     try {
-      const r = await fetch(`${API_URL}/api/admin/employee?key=${ADMIN_KEY}`, {
+      const r = await authFetch(`${API_URL}/api/admin/employee`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ empid }),
@@ -391,7 +390,7 @@ function RuleForm({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
   }
 
   useEffect(() => {
-    fetch(`${API_URL}/api/admin/employees?key=${ADMIN_KEY}`)
+    authFetch(`${API_URL}/api/admin/employees`)
       .then(r => r.ok ? r.json() : { employees: [] })
       .then((d: any) => {
         const devEmps = (d.employees || []).filter((e: any) => e.device_id === device && e.name && !/^\d+$/.test(e.name.trim()));
@@ -451,7 +450,7 @@ function RuleForm({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
       let failCount = 0;
       for (const body of bodies) {
         try {
-          const r = await fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`, {
+          const r = await authFetch(`${API_URL}/api/rules`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -625,7 +624,7 @@ function PoolPanel({ onBack }: { onBack: () => void }) {
 
   function refresh() {
     setChecking(true);
-    fetch(`${API_URL}/api/admin/pool`)
+    authFetch(`${API_URL}/api/admin/pool`)
       .then(r => (r.ok ? r.json() : null))
       .then((d: any) => {
         if (d) {
@@ -644,7 +643,7 @@ function PoolPanel({ onBack }: { onBack: () => void }) {
     const id = setInterval(() => {
       // Keep the status fresh, and ping health to detect when a recycling pool is back.
       if (phase === 'recovering') {
-        fetch(`${API_URL}/api/server/health`, { cache: 'no-store' })
+        authFetch(`${API_URL}/api/server/health`, { cache: 'no-store' })
           .then(r => {
             if (r.ok) {
               setPhase('recovered');
@@ -668,7 +667,7 @@ function PoolPanel({ onBack }: { onBack: () => void }) {
   function restart() {
     setBusy(true);
     setResult(null);
-    fetch(`${API_URL}/api/admin/pool/restart?key=${ADMIN_KEY}`, { method: 'POST' })
+    authFetch(`${API_URL}/api/admin/pool/restart`, { method: 'POST' })
       .then(r => r.json().catch(() => ({})))
       .then((d: any) => {
         if (d && d.success) {
@@ -851,7 +850,7 @@ function ShiftMgmtPanel({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
 
   const loadRules = useCallback(() => {
     setLoadingRules(true);
-    fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`)
+    authFetch(`${API_URL}/api/rules`)
       .then(r => r.ok ? r.json() : { rules: [] })
       .then((d: any) => {
         setRules((d.rules || []).filter((r: any) => r.type === 'shift' && r.device_id === device));
@@ -862,7 +861,7 @@ function ShiftMgmtPanel({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
 
   useEffect(() => {
     setEmpList([]); setSelectedEmps(new Set()); setEmpSearch('');
-    fetch(`${API_URL}/api/admin/employees?key=${ADMIN_KEY}`)
+    authFetch(`${API_URL}/api/admin/employees`)
       .then(r => r.ok ? r.json() : { employees: [] })
       .then((d: any) => {
         const unique = new Map<number, any>();
@@ -893,7 +892,7 @@ function ShiftMgmtPanel({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
         ? ids.map(empid => ({ device_id: device, type: 'shift', name: name.trim() || null, start_time: startTime, end_time: endTime, empid, start_date: startDate || null, end_date: endDate || null }))
         : [{ device_id: device, type: 'shift', name: name.trim() || null, start_time: startTime, end_time: endTime, start_date: startDate || null, end_date: endDate || null }];
       let ok = 0, fail = 0;
-      for (const b of bodies) { try { const r = await fetch(`${API_URL}/api/rules?key=${ADMIN_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); r.ok ? ok++ : fail++; } catch { fail++; } }
+      for (const b of bodies) { try { const r = await authFetch(`${API_URL}/api/rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); r.ok ? ok++ : fail++; } catch { fail++; } }
       setMsg(ok > 0 && fail === 0 ? { type: 'ok', text: `Rule added for ${ok} employee${ok > 1 ? 's' : ''}` } : { type: 'err', text: `${ok} succeeded, ${fail} failed` });
       if (ok > 0) { setSelectedEmps(new Set()); setName(''); loadRules(); }
     } catch { setMsg({ type: 'err', text: 'Failed to connect' }); } finally { setBusy(false); }
@@ -901,7 +900,7 @@ function ShiftMgmtPanel({ locs, onBack }: { locs: Loc[]; onBack: () => void }) {
 
   async function deleteRule(id: number) {
     setDeletingId(id);
-    try { const r = await fetch(`${API_URL}/api/rules/delete?key=${ADMIN_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); if (r.ok) setRules(p => p.filter(r => r.id !== id)); } catch {}
+    try { const r = await authFetch(`${API_URL}/api/rules/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); if (r.ok) setRules(p => p.filter(r => r.id !== id)); } catch {}
     setDeletingId(null);
   }
 

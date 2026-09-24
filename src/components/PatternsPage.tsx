@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles, TrendingUp, AlertTriangle, Building2, RefreshCw, ChevronDown, ShieldAlert, Radar, BrainCircuit } from 'lucide-react';
-
-const API_URL = '/ua';
+import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 
 interface MlProfiles {
   version: number;
@@ -182,7 +182,7 @@ export default function PatternsPage() {
 
   async function load() {
     setRefreshing(true);
-    fetch(`${API_URL}/api/ai/facts`)
+    authFetch(`${API_URL}/api/ai/facts`)
       .then(r => (r.ok ? r.json() : null))
       .then(j => {
         if (j && !j.fallback) {
@@ -196,9 +196,9 @@ export default function PatternsPage() {
       .catch(() => setFactsErr(true));
     try {
       const [ar, lr, mr] = await Promise.all([
-        fetch(`${API_URL}/api/ai-insights`),
-        fetch(`${API_URL}/api/live/all`),
-        fetch(`${API_URL}/api/ml/profiles`),
+        authFetch(`${API_URL}/api/ai-insights`),
+        authFetch(`${API_URL}/api/live/all`),
+        authFetch(`${API_URL}/api/ml/profiles`),
       ]);
       if (ar.ok) setData(await ar.json());
       if (lr.ok) setLive(await lr.json());

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { Building2, Wifi, WifiOff, CheckCircle2, XCircle, MapPin, Users, X, AlertTriangle, Download } from 'lucide-react';
 import { API_URL } from '../data/mockData';
+import { authFetch } from '../lib/auth';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 import { getStaffLocation, STAFF_LOCATIONS } from '../data/staffLocations';
 import { timeAgoText, fmtPunch } from '../lib/status';
@@ -49,7 +50,7 @@ export default function UnitsPage() {
 
   async function fetchData() {
     try {
-      const r = await fetch(`${API_URL}/api/live/all`);
+      const r = await authFetch(`${API_URL}/api/live/all`);
       if (r.ok) setData(await r.json());
     } catch { /* ignore */ }
   }
@@ -67,7 +68,7 @@ export default function UnitsPage() {
     const months = new Set<string>();
     for (const e of unitEmps) {
       try {
-        const r = await fetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
+        const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
         if (!r.ok) continue;
         const d = await r.json();
         for (const m of d.months) months.add(m.month);
@@ -107,7 +108,7 @@ export default function UnitsPage() {
 
       async function fetchSummary(e: { id: string; name: string; unitLoc?: string }) {
         try {
-          const r = await fetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
+          const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
           if (!r.ok) return null;
           const d = await r.json();
           const s = d.months.find((m: { month: string }) => m.month === repMonth) ?? null;
