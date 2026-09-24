@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X, Sun, Moon } from 'lucide-react';
+import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X } from 'lucide-react';
 import { API_URL } from '../data/mockData';
 
 interface AdminPageProps {
@@ -88,7 +88,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
   const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
   const [adminTab, setAdminTab] = useState<'employees' | 'users' | 'shifts'>('employees');
-  useState(false);
+
   const canManageAll = role === 'superadmin' || role === 'admin';
   const isSuper = role === 'superadmin';
   const defaultDeviceId = canManageAll ? 24 : (deviceId ?? 24);

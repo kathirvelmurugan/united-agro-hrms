@@ -127,7 +127,7 @@ export default function AllBranchesPage() {
   const dataRef = useRef<AllLiveData | null>(null);
   useEffect(() => { dataRef.current = data; }, [data]);
 
-  useEffect(() {
+  useEffect(() => {
     if (mode !== 'monthly') return;
     let cancelled = false;
     setSummaryLoading(true);
@@ -317,13 +317,6 @@ export default function AllBranchesPage() {
                 className="shrink-0 h-7 px-2 rounded-lg border border-gray-200 text-[10px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
               />
             )}
-            <button
-              onClick={() => setDark(d => !d)}
-              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              {dark ? <Sun size={13} /> : <Moon size={13} />}
-            </button>
             <button
               onClick={refreshNow}
               title="Refresh"

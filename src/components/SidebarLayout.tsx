@@ -1,5 +1,4 @@
-﻿import { LayoutDashboard, LogOut, Shield, Sparkles, Users, Clock, Building2, Activity, BarChart3, Fingerprint, Radar, Moon, Sun, Database } from 'lucide-react';
-import { useEffect, useState } from 'react';
+﻿import { LayoutDashboard, LogOut, Shield, Sparkles, Users, Clock, Building2, Activity, BarChart3, Fingerprint, Radar, Database } from 'lucide-react';
 
 export type MenuKey =
   | 'ai'
@@ -37,6 +36,7 @@ interface SidebarLayoutProps {
 export default function SidebarLayout({
   label, role, active, onNavigate, onLogout, onAdmin, children
 }: SidebarLayoutProps) {
+  const canAdmin = role === 'superadmin' || role === 'admin';
 
   return (
     <div className="h-screen w-full bg-[#f0f4f8] flex overflow-hidden">
