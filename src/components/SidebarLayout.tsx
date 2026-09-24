@@ -37,13 +37,6 @@ interface SidebarLayoutProps {
 export default function SidebarLayout({
   label, role, active, onNavigate, onLogout, onAdmin, children
 }: SidebarLayoutProps) {
-  const canAdmin = role === 'superadmin' || role === 'admin';
-  const [dark, setDark] = useState(() => localStorage.getItem('ua-theme') === 'dark');
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('ua-theme', dark ? 'dark' : 'light');
-  }, [dark]);
 
   return (
     <div className="h-screen w-full bg-[#f0f4f8] flex overflow-hidden">
@@ -96,11 +89,6 @@ export default function SidebarLayout({
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-300 hover:bg-red-500/10 hover:text-red-400 transition-all shrink-0">
             <LogOut size={18} className="text-gray-400" />
             Logout
-          </button>
-          <button onClick={() => setDark(d => !d)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-all shrink-0">
-            {dark ? <Sun size={18} className="text-gray-400" /> : <Moon size={18} className="text-gray-400" />}
-            {dark ? 'Light Theme' : 'Dark Theme'}
           </button>
         </div>
       </aside>

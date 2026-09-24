@@ -88,12 +88,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
   const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
   const [adminTab, setAdminTab] = useState<'employees' | 'users' | 'shifts'>('employees');
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('ua-theme', dark ? 'dark' : 'light');
-  }, [dark]);
-
+  useState(false);
   const canManageAll = role === 'superadmin' || role === 'admin';
   const isSuper = role === 'superadmin';
   const defaultDeviceId = canManageAll ? 24 : (deviceId ?? 24);
@@ -381,10 +376,6 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
               <ArrowLeft size={12} /> Dashboard
             </button>
             <span className="text-[11px] text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{label}</span>
-            <button onClick={() => setDark(d => !d)} className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50 transition-colors" title="Toggle theme">
-              {dark ? <Sun size={12} /> : <Moon size={12} />}
-              {dark ? 'Light' : 'Dark'}
-            </button>
             <button onClick={onLogout} className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors">
               <LogOut size={12} /> Logout
             </button>

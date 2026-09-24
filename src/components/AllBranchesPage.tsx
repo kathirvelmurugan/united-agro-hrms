@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useMemo, useRef } from 'react';
-import { Users, Wifi, WifiOff, Clock4, RefreshCw, Moon, Sun, CalendarDays, Table2, AlertTriangle, X, Trash2, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
+import { Users, Wifi, WifiOff, Clock4, RefreshCw, CalendarDays, Table2, AlertTriangle, X, Trash2, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import { API_URL } from '../data/mockData';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 import { deriveStatus, workingSeconds, formatDuration, parsePunchTime, STATUS_META, STATUS_ORDER, shiftForBranch, timeAgoText, fmtPunch, type EmpStatus } from '../lib/status';
@@ -110,7 +110,6 @@ export default function AllBranchesPage() {
   const [shiftOpen, setShiftOpen] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
-  const [dark, setDark] = useState(() => localStorage.getItem('ua-theme') === 'dark');
   const [mode, setMode] = useState<'live' | 'monthly'>('live');
   const [summaryMonth, setSummaryMonth] = useState(() => {
     const d = new Date();
@@ -128,7 +127,7 @@ export default function AllBranchesPage() {
   const dataRef = useRef<AllLiveData | null>(null);
   useEffect(() => { dataRef.current = data; }, [data]);
 
-  useEffect(() => {
+  useEffect(() {
     if (mode !== 'monthly') return;
     let cancelled = false;
     setSummaryLoading(true);
@@ -141,11 +140,6 @@ export default function AllBranchesPage() {
       .finally(() => { if (!cancelled) setSummaryLoading(false); });
     return () => { cancelled = true; };
   }, [mode, summaryMonth, selectedBranch]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('ua-theme', dark ? 'dark' : 'light');
-  }, [dark]);
 
   async function fetchData() {
     try {
