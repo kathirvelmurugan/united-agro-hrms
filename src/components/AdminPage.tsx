@@ -14,6 +14,7 @@ interface AdminPageProps {
 
 interface UserEntry {
   username: string;
+  email: string;
   role: string;
   label: string;
   device_id: number | null;
@@ -21,6 +22,7 @@ interface UserEntry {
 }
 
 interface UserForm {
+  username: string;
   email: string;
   password: string;
   label: string;
@@ -66,11 +68,11 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<UserForm>({ email: '', password: '', label: '', role: 'manager', device_id: 24 });
+  const [form, setForm] = useState<UserForm>({ username: '', email: '', password: '', label: '', role: 'manager', device_id: 24 });
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState('');
   const [editingUser, setEditingUser] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ password: '', label: '', role: 'manager', device_id: 24 });
+  const [editForm, setEditForm] = useState({ email: '', password: '', label: '', role: 'manager', device_id: 24 });
 
   // Shift management state
   const [shiftDevice, setShiftDevice] = useState<number>(deviceId ?? 24);
@@ -286,13 +288,13 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
       const r = await authFetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: form.email, password: form.password, label: form.label, role: form.role, device_id: form.device_id }),
+        body: JSON.stringify({ username: form.username, email: form.email, password: form.password, label: form.label, role: form.role, device_id: form.device_id }),
       });
       const d = await r.json();
       if (r.ok) {
         setMsg(d.success);
         setMsgType('success');
-        setForm({ email: '', password: '', label: '', role: 'manager', device_id: defaultDeviceId });
+        setForm({ username: '', email: '', password: '', label: '', role: 'manager', device_id: defaultDeviceId });
         fetchUsers();
       } else {
         setMsg(d.error);
@@ -325,14 +327,14 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
 
   function startEdit(u: UserEntry) {
     setEditingUser(u.username);
-    setEditForm({ password: '', label: u.label, role: u.role, device_id: u.device_id ?? 24 });
+    setEditForm({ email: u.email, password: '', label: u.label, role: u.role, device_id: u.device_id ?? 24 });
   }
 
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
     try {
-      const body: any = { label: editForm.label, role: editForm.role, device_id: editForm.device_id };
+      const body: any = { email: editForm.email, label: editForm.label, role: editForm.role, device_id: editForm.device_id };
       if (editForm.password.trim()) body.password = editForm.password;
       const r = await authFetch(`${API_URL}/api/users/${encodeURIComponent(editingUser)}`, {
         method: 'PUT',
@@ -475,7 +477,8 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
               <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm">
                 <h2 className="text-xs font-semibold text-indigo-800 mb-3 flex items-center gap-2"><div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center"><Plus size={12} className="text-indigo-600"/></div>Add User</h2>
                 <form onSubmit={handleCreate} className="space-y-2">
-                  <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Email</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required placeholder="user@example.com" autoComplete="off" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
+                   <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Username</label><input type="text" value={form.username} onChange={e=>setForm({...form,username:e.target.value})} required placeholder="login username" autoComplete="off" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
+                   <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Recovery Email</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required placeholder="user@example.com" autoComplete="off" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
                   <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Password</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required autoComplete="new-password" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
                   <div><label className="block text-[10px] font-medium text-indigo-700 mb-0.5">Label</label><input type="text" value={form.label} onChange={e=>setForm({...form,label:e.target.value})} required placeholder="Manager - Location" className="w-full px-2.5 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white"/></div>
                   <div className="grid grid-cols-2 gap-2">
@@ -491,10 +494,10 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
                   <button onClick={()=>{setLoading(true);fetchUsers();}} className="text-[10px] text-indigo-400 hover:text-indigo-600 flex items-center gap-1"><RefreshCw size={10}/> Refresh</button>
                 </div>
                 {loading ? <div className="text-center py-6 text-xs text-indigo-400">Loading...</div> : visibleUsers.length===0 ? <div className="text-center py-6 text-xs text-indigo-400">No users yet</div> : (
-                  <div className="overflow-x-auto"><table className="w-full"><thead><tr className="bg-indigo-50/80"><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Email</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Label</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Role</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Unit</th><th className="px-4 py-2 text-right text-[10px] font-semibold text-indigo-600 uppercase">Action</th></tr></thead><tbody className="divide-y divide-indigo-100">{visibleUsers.map(u=> editingUser===u.username ? (
-                    <tr key={u.username} className="bg-indigo-50/80"><td className="px-4 py-2 text-xs">{u.username}</td><td className="px-4 py-2"><input value={editForm.label} onChange={e=>setEditForm({...editForm,label:e.target.value})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"/></td><td className="px-4 py-2"><select value={editForm.role} onChange={e=>setEditForm({...editForm,role:e.target.value})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"><option value="manager">Manager</option>{isSuper && <option value="admin">Admin</option>}</select></td><td className="px-4 py-2"><select value={editForm.device_id} onChange={e=>setEditForm({...editForm,device_id:parseInt(e.target.value)})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white">{locations.map(loc=> <option key={loc.device_id} value={loc.device_id}>{loc.name}</option>)}</select></td><td className="px-4 py-2"><div className="flex items-center gap-1 justify-end"><button onClick={()=>setEditingUser(null)} className="p-1 rounded hover:bg-gray-100"><X size={12}/></button><button onClick={handleEdit} className="text-[10px] bg-indigo-500 text-white px-2 py-0.5 rounded">Save</button></div></td></tr>
+                  <div className="overflow-x-auto"><table className="w-full"><thead><tr className="bg-indigo-50/80"><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Username / Recovery Email</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Label</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Role</th><th className="px-4 py-2 text-left text-[10px] font-semibold text-indigo-600 uppercase">Unit</th><th className="px-4 py-2 text-right text-[10px] font-semibold text-indigo-600 uppercase">Action</th></tr></thead><tbody className="divide-y divide-indigo-100">{visibleUsers.map(u=> editingUser===u.username ? (
+                    <tr key={u.username} className="bg-indigo-50/80"><td className="px-4 py-2 text-xs"><div>{u.username}</div><input type="email" value={editForm.email} onChange={e=>setEditForm({...editForm,email:e.target.value})} placeholder="Recovery email" className="mt-1 w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"/></td><td className="px-4 py-2"><input value={editForm.label} onChange={e=>setEditForm({...editForm,label:e.target.value})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"/></td><td className="px-4 py-2"><select value={editForm.role} onChange={e=>setEditForm({...editForm,role:e.target.value})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white"><option value="manager">Manager</option>{isSuper && <option value="admin">Admin</option>}</select></td><td className="px-4 py-2"><select value={editForm.device_id} onChange={e=>setEditForm({...editForm,device_id:parseInt(e.target.value)})} className="w-full px-2 py-1 border border-indigo-200 rounded text-xs bg-white">{locations.map(loc=> <option key={loc.device_id} value={loc.device_id}>{loc.name}</option>)}</select></td><td className="px-4 py-2"><div className="flex items-center gap-1 justify-end"><button onClick={()=>setEditingUser(null)} className="p-1 rounded hover:bg-gray-100"><X size={12}/></button><button onClick={handleEdit} className="text-[10px] bg-indigo-500 text-white px-2 py-0.5 rounded">Save</button></div></td></tr>
                   ) : (
-                    <tr key={u.username} className="hover:bg-indigo-50/50"><td className="px-4 py-2 text-xs">{u.username}</td><td className="px-4 py-2 text-xs">{u.label}</td><td className="px-4 py-2"><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${u.role==='admin' ? 'bg-indigo-100 text-indigo-700' : u.role==='superadmin' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-50 text-indigo-600'}`}>{u.role}</span></td><td className="px-4 py-2 text-xs">{u.location || '-'}</td><td className="px-4 py-2 text-right"><div className="inline-flex gap-1">{u.role!=='superadmin' && <><button onClick={()=>startEdit(u)} className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded hover:bg-indigo-100"><Pencil size={10} className="inline"/> Edit</button><button onClick={()=>handleDelete(u.username)} className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded hover:bg-red-100"><Trash2 size={10} className="inline"/> Delete</button></>}</div></td></tr>
+                    <tr key={u.username} className="hover:bg-indigo-50/50"><td className="px-4 py-2 text-xs"><div>{u.username}</div><div className="text-[10px] text-indigo-500">{u.email || '-'}</div></td><td className="px-4 py-2 text-xs">{u.label}</td><td className="px-4 py-2"><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${u.role==='admin' ? 'bg-indigo-100 text-indigo-700' : u.role==='superadmin' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-50 text-indigo-600'}`}>{u.role}</span></td><td className="px-4 py-2 text-xs">{u.location || '-'}</td><td className="px-4 py-2 text-right"><div className="inline-flex gap-1">{u.role!=='superadmin' && <><button onClick={()=>startEdit(u)} className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded hover:bg-indigo-100"><Pencil size={10} className="inline"/> Edit</button><button onClick={()=>handleDelete(u.username)} className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded hover:bg-red-100"><Trash2 size={10} className="inline"/> Delete</button></>}</div></td></tr>
                   ))}</tbody></table></div>
                 )}
               </div>

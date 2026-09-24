@@ -64,12 +64,6 @@ Set these values in `backend/config.json` or the process environment:
 - `DB_ENCRYPT`
 - `DB_TRUST_SERVER_CERTIFICATE`
 - `SESSION_COOKIE_SECURE`
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USERNAME`
-- `SMTP_PASSWORD`
-- `SMTP_SENDER`
-- `SMTP_FROM_NAME`
 - `FRONTEND_DIR`
 - `BACKUP_DIR`
 
@@ -95,24 +89,7 @@ $env:FRONTEND_DIR = "$PWD\dist"
 - Password changes invalidate all active sessions for that user.
 - Five failed logins from one client IP trigger a 15-minute block.
 - Passwords are stored with salted Werkzeug hashes.
-
-## Password reset OTP
-
-- Users request a six-digit OTP with a registered username or email.
-- Gmail SMTP sends the OTP over TLS; the code expires after 10 minutes.
-- Only a hashed OTP is stored in SQL Server.
-- Five verification attempts are allowed per OTP.
-- Resend attempts are limited per account and client IP.
-- A verified Flask session allows one new-password submission within 10 minutes.
-- Successful reset hashes the new password and invalidates all previous sessions.
-
-Gmail requires 2FA and an app password. Set `SMTP_USERNAME` to the Gmail address, `SMTP_SENDER` to the same address, and place the app password only in the protected server `config.json` or environment variables. On the server, run the secure prompt once:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Users\Administrator\Desktop\attendance-dashboard\deploy\configure-gmail-smtp.ps1
-```
-
-The script never displays or stores the app password outside `C:\inetpub\wwwroot\ua\config.json`.
+- The login dialog directs locked-out users to Administrative Management; password changes are made by an administrator.
 
 ## IIS and Nginx deployment
 
@@ -171,7 +148,6 @@ Then verify:
 8. Five consecutive failed logins produce a block.
 9. Punch ingestion at `/iclock/` remains available.
 10. SQL backups and roster operations succeed for an administrator.
-11. Password reset OTP email arrives, expires correctly, and the new password signs in successfully.
 
 ## Rollback
 

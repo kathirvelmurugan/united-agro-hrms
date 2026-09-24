@@ -12,14 +12,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showForgot, setShowForgot] = useState(false);
-  const [resetIdentifier, setResetIdentifier] = useState('');
-  const [resetStage, setResetStage] = useState<'request' | 'verify' | 'complete' | 'success'>('request');
-  const [resetOtp, setResetOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -50,102 +42,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   function closeForgotPassword() {
-    if (resetLoading) return;
     setShowForgot(false);
-    setResetIdentifier('');
-    setResetStage('request');
-    setResetOtp('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setResetError('');
-    setResetSuccess('');
-  }
-
-  async function submitPasswordResetRequest(e: React.FormEvent) {
-    e.preventDefault();
-    const identifier = resetIdentifier.trim();
-    if (!identifier) {
-      setResetError('Enter your username or email');
-      return;
-    }
-
-    setResetLoading(true);
-    setResetError('');
-    setResetSuccess('');
-    try {
-      const response = await fetch(`${API_URL}/api/password-reset/request`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string; message?: string; success?: boolean };
-      if (!response.ok || data.success === false) throw new Error(data.error || data.message || 'Unable to send OTP');
-      setResetStage('verify');
-      setResetSuccess('A six-digit OTP has been sent. Enter it below to continue.');
-    } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Cannot connect to server');
-    } finally {
-      setResetLoading(false);
-    }
-  }
-
-  async function submitOtpVerification(e: React.FormEvent) {
-    e.preventDefault();
-    if (!/^\d{6}$/.test(resetOtp)) {
-      setResetError('Enter a valid six-digit OTP');
-      return;
-    }
-
-    setResetLoading(true);
-    setResetError('');
-    setResetSuccess('');
-    try {
-      const response = await fetch(`${API_URL}/api/password-reset/verify`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: resetIdentifier.trim(), otp: resetOtp }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string; message?: string; success?: boolean };
-      if (!response.ok || data.success === false) throw new Error(data.error || data.message || 'Invalid or expired OTP');
-      setResetStage('complete');
-    } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Cannot connect to server');
-    } finally {
-      setResetLoading(false);
-    }
-  }
-
-  async function submitPasswordResetCompletion(e: React.FormEvent) {
-    e.preventDefault();
-    if (newPassword.length < 8) {
-      setResetError('New password must be at least eight characters');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setResetError('Passwords do not match');
-      return;
-    }
-
-    setResetLoading(true);
-    setResetError('');
-    setResetSuccess('');
-    try {
-      const response = await fetch(`${API_URL}/api/password-reset/complete`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: resetIdentifier.trim(), new_password: newPassword }),
-      });
-      const data = await response.json().catch(() => ({})) as { error?: string; message?: string; success?: boolean };
-      if (!response.ok || data.success === false) throw new Error(data.error || data.message || 'Unable to reset password');
-      setResetStage('success');
-    } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Cannot connect to server');
-    } finally {
-      setResetLoading(false);
-    }
   }
 
   return (
@@ -313,119 +210,23 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-900">Reset Password</h2>
-                <button type="button" onClick={closeForgotPassword} disabled={resetLoading}
-                  className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 disabled:cursor-not-allowed disabled:opacity-50">
+                <h2 className="text-sm font-semibold text-gray-900">Forgot Password</h2>
+                <button type="button" onClick={closeForgotPassword}
+                  className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
                   <X size={18} />
                 </button>
               </div>
-              {resetStage === 'success' ? (
-                <div className="p-6 text-center">
-                  <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
-                    <Mail size={24} className="text-green-600" />
-                  </div>
-                  <p className="text-sm font-medium text-gray-900 mb-1">Password reset successfully</p>
-                  <p className="text-xs text-gray-500">You can now sign in with your new password.</p>
-                  <button type="button" onClick={closeForgotPassword}
-                    className="mt-4 text-xs text-brand-600 hover:text-brand-700 font-medium">
-                    Back to Sign In
-                  </button>
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center mx-auto mb-3">
+                  <Mail size={24} className="text-brand-600" />
                 </div>
-              ) : resetStage === 'request' ? (
-                <form onSubmit={submitPasswordResetRequest} className="p-6 space-y-4">
-                  <p className="text-xs text-gray-500">Enter your registered username or email to receive a six-digit OTP.</p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Username / Email</label>
-                    <input
-                      type="text"
-                      value={resetIdentifier}
-                      onChange={e => { setResetIdentifier(e.target.value); setResetError(''); }}
-                      placeholder="Enter username or email"
-                      autoComplete="username"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    />
-                  </div>
-                  {resetError && (
-                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{resetError}</p>
-                  )}
-                  <button type="submit" disabled={resetLoading}
-                    className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                    {resetLoading ? 'Sending OTP...' : 'Send OTP'}
-                  </button>
-                </form>
-              ) : resetStage === 'verify' ? (
-                <form onSubmit={submitOtpVerification} className="p-6 space-y-4">
-                  <p className="text-xs text-gray-500">Enter the six-digit OTP sent to {resetIdentifier.trim()}.</p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">OTP</label>
-                    <input
-                      type="text"
-                      value={resetOtp}
-                      onChange={e => { setResetOtp(e.target.value); setResetError(''); setResetSuccess(''); }}
-                      placeholder="Enter six-digit OTP"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      title="Enter a six-digit OTP"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    />
-                  </div>
-                  {resetError && (
-                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{resetError}</p>
-                  )}
-                  {resetSuccess && (
-                    <p className="text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg">{resetSuccess}</p>
-                  )}
-                  <button type="submit" disabled={resetLoading}
-                    className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                    {resetLoading ? 'Verifying...' : 'Verify OTP'}
-                  </button>
-                  <button type="button" onClick={() => { setResetStage('request'); setResetOtp(''); setResetError(''); setResetSuccess(''); }}
-                    className="w-full text-xs text-brand-600 hover:text-brand-700 font-medium">
-                    Use a different username or email
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={submitPasswordResetCompletion} className="p-6 space-y-4">
-                  <p className="text-xs text-gray-500">Enter and confirm your new password.</p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">New Password</label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={e => { setNewPassword(e.target.value); setResetError(''); }}
-                      placeholder="Enter new password"
-                      autoComplete="new-password"
-                      minLength={8}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Confirm Password</label>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={e => { setConfirmPassword(e.target.value); setResetError(''); }}
-                      placeholder="Confirm new password"
-                      autoComplete="new-password"
-                      minLength={8}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    />
-                  </div>
-                  {resetError && (
-                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{resetError}</p>
-                  )}
-                  <button type="submit" disabled={resetLoading}
-                    className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                    {resetLoading ? 'Updating password...' : 'Reset Password'}
-                  </button>
-                </form>
-              )}
+                <p className="text-sm font-medium text-gray-900 mb-1">Contact Administrative Management</p>
+                <p className="text-xs text-gray-500">Please contact Administrative Management to access the account.</p>
+                <button type="button" onClick={closeForgotPassword}
+                  className="mt-4 text-xs text-brand-600 hover:text-brand-700 font-medium">
+                  Back to Sign In
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

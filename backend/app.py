@@ -5,13 +5,7 @@ import time
 import re
 import secrets
 import ipaddress
-import hashlib
-import hmac
-import smtplib
-import ssl
 from copy import deepcopy
-from email.message import EmailMessage
-from email.utils import formataddr
 from datetime import date, datetime, timedelta
 import urllib.request
 import pyodbc
@@ -78,18 +72,6 @@ DB_CONFIG = (
     f"TrustServerCertificate={DB_TRUST_SERVER_CERTIFICATE};"
     "Pooling=True;"
 )
-SMTP_HOST = config_value("SMTP_HOST", "smtp.gmail.com")
-try:
-    SMTP_PORT = int(config_value("SMTP_PORT", "587"))
-except (TypeError, ValueError):
-    SMTP_PORT = 587
-SMTP_USERNAME = config_value("SMTP_USERNAME")
-SMTP_PASSWORD = config_value("SMTP_PASSWORD")
-if SMTP_PASSWORD:
-    SMTP_PASSWORD = SMTP_PASSWORD.replace(" ", "")
-SMTP_SENDER = config_value("SMTP_SENDER", SMTP_USERNAME)
-SMTP_FROM_NAME = config_value("SMTP_FROM_NAME", "UA HRMS")
-
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 app.config.update(
@@ -159,15 +141,7 @@ LOGIN_ATTEMPTS = {}
 LOGIN_LOCK = threading.Lock()
 MAX_LOGIN_ATTEMPTS = 5
 LOGIN_BLOCK_SECONDS = 15 * 60
-PASSWORD_RESET_RESENDS = {}
-PASSWORD_RESET_LOCK = threading.Lock()
-PASSWORD_RESET_DB_LOCK = threading.Lock()
-PASSWORD_RESET_RESEND_LIMIT = 3
-PASSWORD_RESET_RESEND_WINDOW = 60 * 60
-PASSWORD_RESET_ATTEMPT_LIMIT = 5
-PASSWORD_RESET_LIFETIME = 10 * 60
-PASSWORD_RESET_TABLE = "dbo.PasswordResetChallenges"
-PASSWORD_RESET_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 def check_password(stored, given):
     if not stored:
@@ -318,151 +292,8 @@ def save_users(users):
 load_users()
 
 
-def is_password_reset_email(value):
-    return isinstance(value, str) and bool(PASSWORD_RESET_EMAIL_PATTERN.fullmatch(value.strip()))
-
-
-def find_password_reset_user(identifier):
-    if not isinstance(identifier, str) or not identifier.strip():
-        return None, None
-    users = load_users()
-    identifier = identifier.strip()
-    user_data = users.get(identifier)
-    username = identifier
-    if user_data is None:
-        normalized = identifier.casefold()
-        for candidate_username, candidate_data in users.items():
-            record_email = candidate_data.get("email")
-            if candidate_username.casefold() == normalized or (
-                isinstance(record_email, str) and record_email.strip().casefold() == normalized
-            ):
-                username = candidate_username
-                user_data = candidate_data
-                break
-    if user_data is None:
-        return None, None
-    record_email = user_data.get("email")
-    if is_password_reset_email(username):
-        return username, username
-    if is_password_reset_email(record_email):
-        return username, record_email.strip()
-    return None, None
-
-
-def hash_password_reset_code(username, otp):
-    value = f"{username.strip().casefold()}:{otp}"
-    return hmac.new(SECRET_KEY.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
-
-
-def ensure_password_reset_challenges_table():
-    with PASSWORD_RESET_DB_LOCK:
-        conn = pyodbc.connect(DB_CONFIG)
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                IF OBJECT_ID(N'dbo.PasswordResetChallenges', N'U') IS NULL
-                BEGIN
-                    CREATE TABLE dbo.PasswordResetChallenges (
-                        Username NVARCHAR(256) NOT NULL CONSTRAINT PK_PasswordResetChallenges PRIMARY KEY,
-                        CodeHash CHAR(64) NOT NULL,
-                        ExpiresAt DATETIME2 NOT NULL,
-                        Attempts INT NOT NULL CONSTRAINT DF_PasswordResetChallenges_Attempts DEFAULT (0),
-                        CreatedAt DATETIME2 NOT NULL,
-                        Used BIT NOT NULL CONSTRAINT DF_PasswordResetChallenges_Used DEFAULT (0)
-                    )
-                END
-            """)
-            conn.commit()
-        finally:
-            conn.close()
-
-
-def store_password_reset_challenge(username, code_hash, expires_at, created_at):
-    ensure_password_reset_challenges_table()
-    conn = pyodbc.connect(DB_CONFIG)
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM dbo.PasswordResetChallenges WHERE Username = ?", (username,))
-        cursor.execute("""
-            INSERT INTO dbo.PasswordResetChallenges
-                (Username, CodeHash, ExpiresAt, Attempts, CreatedAt, Used)
-            VALUES (?, ?, ?, 0, ?, 0)
-        """, (username, code_hash, expires_at, created_at))
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def allow_password_reset_resend(identifier, client_ip):
-    identifier_key = hashlib.sha256(identifier.strip().casefold().encode("utf-8")).hexdigest()
-    key = f"{identifier_key}:{client_ip}"
-    now = time.time()
-    with PASSWORD_RESET_LOCK:
-        timestamps = [
-            value for value in PASSWORD_RESET_RESENDS.get(key, [])
-            if now - value < PASSWORD_RESET_RESEND_WINDOW
-        ]
-        if len(timestamps) >= PASSWORD_RESET_RESEND_LIMIT:
-            PASSWORD_RESET_RESENDS[key] = timestamps
-            return False
-        timestamps.append(now)
-        PASSWORD_RESET_RESENDS[key] = timestamps
-        return True
-
-
-def verify_password_reset_code(username, otp):
-    ensure_password_reset_challenges_table()
-    code_hash = hash_password_reset_code(username, otp)
-    conn = pyodbc.connect(DB_CONFIG)
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT CodeHash, ExpiresAt, Attempts, Used
-            FROM dbo.PasswordResetChallenges WITH (UPDLOCK, ROWLOCK)
-            WHERE Username = ?
-        """, (username,))
-        row = cursor.fetchone()
-        if row is None:
-            return False
-        expires_at, attempts, used = row[1], int(row[2] or 0), bool(row[3])
-        if used or attempts >= PASSWORD_RESET_ATTEMPT_LIMIT or expires_at <= datetime.utcnow():
-            return False
-        if hmac.compare_digest(str(row[0]).lower(), code_hash):
-            cursor.execute("""
-                UPDATE dbo.PasswordResetChallenges
-                SET Used = 1
-                WHERE Username = ? AND Used = 0
-            """, (username,))
-            success = cursor.rowcount == 1
-        else:
-            cursor.execute("""
-                UPDATE dbo.PasswordResetChallenges
-                SET Attempts = Attempts + 1
-                WHERE Username = ? AND Used = 0 AND Attempts < ?
-            """, (username, PASSWORD_RESET_ATTEMPT_LIMIT))
-            success = False
-        conn.commit()
-        return success
-    finally:
-        conn.close()
-
-
-def send_password_reset_otp(recipient, otp):
-    if not SMTP_USERNAME or not SMTP_PASSWORD or not SMTP_SENDER:
-        raise RuntimeError("SMTP is not configured")
-    message = EmailMessage()
-    message["Subject"] = "Your UA HRMS password reset code"
-    message["From"] = formataddr((SMTP_FROM_NAME, SMTP_SENDER))
-    message["To"] = recipient
-    message.set_content(
-        f"Your UA HRMS password reset code is {otp}. It expires in 10 minutes."
-    )
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
-        smtp.ehlo()
-        smtp.starttls(context=ssl.create_default_context())
-        smtp.ehlo()
-        smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
-        smtp.send_message(message)
+def is_valid_email(value):
+    return isinstance(value, str) and bool(EMAIL_PATTERN.fullmatch(value.strip()))
 
 
 ADMIN_API_ENDPOINTS = {
@@ -536,12 +367,7 @@ def authenticate_api_request():
         return None
     if not request.path.startswith("/api"):
         return None
-    if request.path in {
-        "/api/login",
-        "/api/password-reset/request",
-        "/api/password-reset/verify",
-        "/api/password-reset/complete",
-    }:
+    if request.path == "/api/login":
         return None
     if request.endpoint == "serve_frontend":
         return jsonify({"error": "Not found"}), 404
@@ -1475,93 +1301,6 @@ def api_login():
     return jsonify(response), 401
 
 
-def password_reset_accepted_response():
-    return jsonify({
-        "success": True,
-        "message": "If the account is eligible, a password reset code has been sent.",
-    })
-
-
-@app.route("/api/password-reset/request", methods=["POST"])
-def api_password_reset_request():
-    data = request.get_json(force=True, silent=True)
-    if not isinstance(data, dict):
-        data = {}
-    identifier = data.get("identifier")
-    if not isinstance(identifier, str) or not identifier.strip():
-        return password_reset_accepted_response()
-    identifier = identifier.strip()
-    if not allow_password_reset_resend(identifier, get_client_ip()):
-        return password_reset_accepted_response()
-    username, recipient = find_password_reset_user(identifier)
-    if not username:
-        return password_reset_accepted_response()
-    otp = f"{secrets.randbelow(1_000_000):06d}"
-    now = datetime.utcnow()
-    try:
-        store_password_reset_challenge(
-            username,
-            hash_password_reset_code(username, otp),
-            now + timedelta(seconds=PASSWORD_RESET_LIFETIME),
-            now,
-        )
-        send_password_reset_otp(recipient, otp)
-    except Exception:
-        app.logger.exception("Password reset email delivery failed")
-    return password_reset_accepted_response()
-
-
-@app.route("/api/password-reset/verify", methods=["POST"])
-def api_password_reset_verify():
-    data = request.get_json(force=True, silent=True)
-    if not isinstance(data, dict):
-        data = {}
-    identifier = data.get("identifier")
-    otp = data.get("otp")
-    if not isinstance(identifier, str) or not isinstance(otp, str):
-        return jsonify({"success": False, "error": "Invalid or expired code"}), 400
-    username, _recipient = find_password_reset_user(identifier.strip())
-    if not username:
-        return jsonify({"success": False, "error": "Invalid or expired code"}), 400
-    try:
-        valid = verify_password_reset_code(username, otp)
-    except Exception:
-        valid = False
-    if not valid:
-        return jsonify({"success": False, "error": "Invalid or expired code"}), 400
-    session["password_reset_user"] = username
-    session["password_reset_expires_at"] = time.time() + PASSWORD_RESET_LIFETIME
-    return jsonify({"success": True})
-
-
-@app.route("/api/password-reset/complete", methods=["POST"])
-def api_password_reset_complete():
-    username = session.get("password_reset_user")
-    expires_at = session.get("password_reset_expires_at")
-    if not isinstance(username, str) or not isinstance(expires_at, (int, float)) or expires_at <= time.time():
-        session.pop("password_reset_user", None)
-        session.pop("password_reset_expires_at", None)
-        return jsonify({"success": False, "error": "Invalid or expired reset session"}), 400
-    data = request.get_json(force=True, silent=True)
-    if not isinstance(data, dict):
-        data = {}
-    new_password = data.get("new_password")
-    if not isinstance(new_password, str) or len(new_password) < 8:
-        return jsonify({"success": False, "error": "Password must be at least 8 characters"}), 400
-    users = load_users()
-    if username not in users:
-        session.clear()
-        return jsonify({"success": False, "error": "Invalid or expired reset session"}), 400
-    users[username]["password"] = hash_password(new_password)
-    users[username]["auth_version"] = int(users[username].get("auth_version", 0)) + 1
-    try:
-        save_users(users)
-    except Exception:
-        return jsonify({"success": False, "error": "Unable to complete password reset"}), 500
-    session.clear()
-    return jsonify({"success": True})
-
-
 @app.route("/api/logout", methods=["POST"])
 def api_logout():
     session.clear()
@@ -1594,6 +1333,7 @@ def api_users():
                 continue
             result.append({
                 "username": u,
+                "email": d.get("email") or (u if is_valid_email(u) else ""),
                 "role": d.get("role"),
                 "label": d.get("label", ""),
                 "device_id": d.get("device_id"),
@@ -1605,6 +1345,11 @@ def api_users():
     username = (data.get("username") or "").strip()
     password = (data.get("password") or "").strip()
     label = (data.get("label") or "").strip()
+    email = str(data.get("email") or "").strip().casefold()
+    if email and not is_valid_email(email):
+        return jsonify({"error": "Invalid recovery email"}), 400
+    if not email and is_valid_email(username):
+        email = username.casefold()
     role = str(data.get("role", "manager")).strip().lower()
     try:
         device_id = int(data.get("device_id", actor.get("device_id") or 0))
@@ -1624,6 +1369,7 @@ def api_users():
         return jsonify({"error": "Forbidden"}), 403
     users[username] = {
         "password": hash_password(password),
+        "email": email,
         "role": role,
         "label": label,
         "device_id": device_id,
@@ -1654,6 +1400,11 @@ def api_update_user(username):
     if actor.get("role") == "admin" and users[username].get("device_id") != actor.get("device_id"):
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json(force=True, silent=True) or {}
+    if "email" in data:
+        email = str(data.get("email") or "").strip().casefold()
+        if email and not is_valid_email(email):
+            return jsonify({"error": "Invalid recovery email"}), 400
+        users[username]["email"] = email
     if "password" in data and data["password"].strip():
         users[username]["password"] = hash_password(data["password"].strip())
         users[username]["auth_version"] = int(users[username].get("auth_version", 0)) + 1
