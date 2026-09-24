@@ -20,6 +20,7 @@ backend/wsgi.py         IIS/wfastcgi entry point
 backend/requirements.txt Pinned Python environment
 backend/web.config      IIS FastCGI configuration
 backend/*.example.json  Non-secret configuration templates
+deploy/nginx.conf       Validated HTTPS and reverse-proxy configuration
 ```
 
 Runtime files such as `backend/config.json`, `backend/users.json`, `venv`, logs, model output, and backups are intentionally excluded from Git.
@@ -120,7 +121,7 @@ location /UA/ {
 }
 ```
 
-The current Nginx configuration serves `/UA/`, `/UA/assets/`, `favicon.svg`, and `icons.svg` directly from the deployed `dist` directory. All other `/UA/` requests are proxied to IIS.
+The current Nginx configuration in `deploy/nginx.conf` serves `/UA/`, `/UA/assets/`, `favicon.svg`, and `icons.svg` directly from the deployed release directory. All other `/UA/` requests are proxied to IIS. Port 80 must be owned only by Nginx; the obsolete `FlaskDeviceForm` scheduled task is disabled because the active `UAFormServer` task serves the form through Nginx on port 5001.
 
 ## Verification
 
