@@ -46,7 +46,7 @@ def odbc_escape(value):
     return str(value).replace("}", "}}")
 
 
-def odbc_bool(name, default):
+def config_bool(name, default):
     value = config_value(name, default).strip().lower()
     if value not in ("yes", "no"):
         raise RuntimeError(f"{name} must be yes or no")
@@ -60,8 +60,8 @@ DB_UID = required_config("DB_UID")
 DB_PASSWORD = required_config("DB_PASSWORD")
 DB_DRIVER = required_config("DB_DRIVER")
 DB_NAME = DB_DATABASE
-DB_ENCRYPT = odbc_bool("DB_ENCRYPT", "yes")
-DB_TRUST_SERVER_CERTIFICATE = odbc_bool("DB_TRUST_SERVER_CERTIFICATE", "no")
+DB_ENCRYPT = config_bool("DB_ENCRYPT", "yes")
+DB_TRUST_SERVER_CERTIFICATE = config_bool("DB_TRUST_SERVER_CERTIFICATE", "no")
 DB_CONFIG = (
     f"DRIVER={{{odbc_escape(DB_DRIVER)}}};"
     f"SERVER={{{odbc_escape(DB_SERVER)}}};"
@@ -77,6 +77,7 @@ app = Flask(__name__)
 app.secret_key = SECRET_KEY
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=config_bool("SESSION_COOKIE_SECURE", "yes") == "yes",
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=480,
     MAX_CONTENT_LENGTH=1024 * 1024,
@@ -137,7 +138,6 @@ app.wsgi_app = LocalProxyMiddleware(app.wsgi_app)
 USERS_FILE = os.path.join(BASE_DIR, "users.json")
 BACKUP_DIR = config_value("BACKUP_DIR", r"C:\Backups")
 
-AUTH_SESSIONS = {}
 LOGIN_ATTEMPTS = {}
 LOGIN_LOCK = threading.Lock()
 MAX_LOGIN_ATTEMPTS = 5
@@ -152,12 +152,6 @@ def check_password(stored, given):
 
 def hash_password(password):
     return generate_password_hash(password)
-
-def kill_user_sessions(username):
-    with LOGIN_LOCK:
-        tokens = [token for token, auth in AUTH_SESSIONS.items() if auth.get("username") == username]
-        for token in tokens:
-            AUTH_SESSIONS.pop(token, None)
 
 def get_client_ip():
     return request.remote_addr or "unknown"
@@ -337,42 +331,30 @@ MANAGER_DEVICE_ENDPOINTS = {
 }
 
 
-def bearer_token():
-    authorization = request.headers.get("Authorization", "")
-    scheme, separator, token = authorization.partition(" ")
-    if not separator or scheme.lower() != "bearer" or not token.strip():
-        return None
-    return token.strip()
-
-
 def current_api_user():
-    token = bearer_token()
-    if not token:
+    username = session.get("user")
+    if not username:
         return None, None
-    with LOGIN_LOCK:
-        auth = AUTH_SESSIONS.get(token)
-        if not auth or auth.get("expires", 0) <= time.time():
-            AUTH_SESSIONS.pop(token, None)
-            auth = None
-        if auth:
-            auth = dict(auth)
-    if not auth:
-        return None, token
-    user_data = load_users().get(auth.get("username"))
+    user_data = load_users().get(username)
     if not user_data:
-        with LOGIN_LOCK:
-            AUTH_SESSIONS.pop(token, None)
-        return None, token
-    auth["role"] = user_data.get("role", "manager")
-    auth["device_id"] = user_data.get("device_id")
-    auth["label"] = user_data.get("label", auth.get("username", ""))
-    return auth, token
+        session.clear()
+        return None, None
+    if int(session.get("auth_version", 0)) != int(user_data.get("auth_version", 0)):
+        session.clear()
+        return None, None
+    auth = {
+        "username": username,
+        "role": user_data.get("role", "manager"),
+        "device_id": user_data.get("device_id"),
+        "label": user_data.get("label", username),
+    }
+    return auth, None
 
 
 @app.before_request
 def authenticate_api_request():
     if request.path == "/backup":
-        auth, _token = current_api_user()
+        auth, _unused = current_api_user()
         if not auth:
             return jsonify({"error": "Not found"}), 404
         if auth.get("role") not in ("admin", "superadmin"):
@@ -384,7 +366,7 @@ def authenticate_api_request():
         return None
     if request.endpoint == "serve_frontend":
         return jsonify({"error": "Not found"}), 404
-    auth, token = current_api_user()
+    auth, _unused = current_api_user()
     if not auth:
         return jsonify({"error": "Unauthorized"}), 401
     if request.endpoint in ADMIN_API_ENDPOINTS and auth.get("role") not in ("admin", "superadmin"):
@@ -402,14 +384,14 @@ def authenticate_api_request():
         except (TypeError, ValueError):
             return jsonify({"error": "Invalid device_id"}), 400
     g.api_auth = auth
-    g.api_token = token
     return None
 
 
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if "user" not in session:
+        auth, _unused = current_api_user()
+        if not auth:
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
@@ -418,11 +400,8 @@ def role_required(*roles):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            if "user" not in session:
-                return redirect(url_for("login"))
-            users = load_users()
-            user_data = users.get(session["user"], {})
-            if user_data.get("role") not in roles:
+            auth, _unused = current_api_user()
+            if not auth or auth.get("role") not in roles:
                 return redirect(url_for("login"))
             return f(*args, **kwargs)
         return decorated
@@ -1025,9 +1004,10 @@ def login():
         user_data = users.get(username)
         if user_data and check_password(user_data.get("password"), password):
             reset_login_attempts(client_ip)
+            session.clear()
             session.permanent = True
             session["user"] = username
-            session["role"] = user_data["role"]
+            session["auth_version"] = int(user_data.get("auth_version", 0))
             return redirect(url_for("dashboard_view"))
         retry_after = record_login_failure(client_ip)
         error = "Invalid username or password"
@@ -1297,20 +1277,16 @@ def api_login():
     user_data = users.get(username)
     if user_data and check_password(user_data.get("password"), password):
         reset_login_attempts(client_ip)
-        token = secrets.token_hex(32)
-        with LOGIN_LOCK:
-            AUTH_SESSIONS[token] = {
-                "username": username,
-                "role": user_data.get("role", "manager"),
-                "expires": time.time() + 8 * 3600,
-            }
+        session.clear()
+        session.permanent = True
+        session["user"] = username
+        session["auth_version"] = int(user_data.get("auth_version", 0))
         return jsonify({
             "success": True,
             "username": username,
             "role": user_data.get("role", "manager"),
             "label": user_data.get("label", username),
             "device_id": user_data.get("device_id"),
-            "token": token,
         })
     retry_after = record_login_failure(client_ip)
     response = {"success": False, "error": "Invalid username or password"}
@@ -1321,8 +1297,7 @@ def api_login():
 
 @app.route("/api/logout", methods=["POST"])
 def api_logout():
-    with LOGIN_LOCK:
-        AUTH_SESSIONS.pop(g.api_token, None)
+    session.clear()
     return jsonify({"success": True})
 
 @app.route("/api/locations")
@@ -1399,7 +1374,6 @@ def api_delete_user(username):
         return jsonify({"error": "Forbidden"}), 403
     del users[username]
     save_users(users)
-    kill_user_sessions(username)
     return jsonify({"success": f"User '{username}' deleted"})
 
 @app.route("/api/users/<username>", methods=["PUT"])
@@ -1413,10 +1387,9 @@ def api_update_user(username):
     if actor.get("role") == "admin" and users[username].get("device_id") != actor.get("device_id"):
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json(force=True, silent=True) or {}
-    authorization_changed = False
     if "password" in data and data["password"].strip():
         users[username]["password"] = hash_password(data["password"].strip())
-        authorization_changed = True
+        users[username]["auth_version"] = int(users[username].get("auth_version", 0)) + 1
     if "label" in data:
         users[username]["label"] = data["label"].strip()
     if "role" in data:
@@ -1428,7 +1401,6 @@ def api_update_user(username):
         if actor.get("role") == "admin" and role != "manager":
             return jsonify({"error": "Forbidden"}), 403
         users[username]["role"] = role
-        authorization_changed = authorization_changed or users[username]["role"] != load_users().get(username, {}).get("role")
     if "device_id" in data:
         try:
             did = int(data["device_id"])
@@ -1438,12 +1410,9 @@ def api_update_user(username):
             return jsonify({"error": "Unknown device_id"}), 400
         if actor.get("role") == "admin" and did != actor.get("device_id"):
             return jsonify({"error": "Forbidden"}), 403
-        authorization_changed = authorization_changed or users[username].get("device_id") != did
         users[username]["device_id"] = did
         users[username]["location"] = LOCATIONS.get(did, {}).get("location", "")
     save_users(users)
-    if authorization_changed:
-        kill_user_sessions(username)
     return jsonify({"success": f"User '{username}' updated"})
 
 @app.route("/admin", methods=["GET", "POST"])
@@ -1535,7 +1504,6 @@ def delete_user():
         if target_data.get("role") != "superadmin":
             del users[target]
             save_users(users)
-            kill_user_sessions(target)
     return redirect(url_for("admin_panel" if user_data.get("role") != "superadmin" else "super_admin"))
 
 @app.route("/logout")

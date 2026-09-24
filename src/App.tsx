@@ -26,7 +26,6 @@ interface SessionUser {
   role: string;
   label: string;
   deviceId: number | null;
-  token: string;
 }
 
 const STORAGE_KEY = 'ua_session_user';
@@ -59,13 +58,12 @@ function loadUser(): SessionUser | null {
     const user: unknown = JSON.parse(raw);
     if (!user || typeof user !== 'object') return null;
     const session = user as Record<string, unknown>;
-    if (typeof session.username !== 'string' || typeof session.role !== 'string' || typeof session.label !== 'string' || (session.deviceId !== null && typeof session.deviceId !== 'number') || typeof session.token !== 'string') return null;
+    if (typeof session.username !== 'string' || typeof session.role !== 'string' || typeof session.label !== 'string' || (session.deviceId !== null && typeof session.deviceId !== 'number')) return null;
     return {
       username: session.username,
       role: session.role,
       label: session.label,
       deviceId: session.deviceId,
-      token: session.token,
     };
   } catch {
     return null;
@@ -134,8 +132,8 @@ export default function App() {
     sessionStorage.setItem(MENU_KEY, next);
   }
 
-  function handleLogin(username: string, role: string, label: string, deviceId: number | null, token: string) {
-    const next = { username, role, label, deviceId, token };
+  function handleLogin(username: string, role: string, label: string, deviceId: number | null) {
+    const next = { username, role, label, deviceId };
     setUser(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setStatusFilter('all');

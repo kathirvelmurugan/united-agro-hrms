@@ -7,6 +7,7 @@
   "DB_DRIVER": "ODBC Driver 17 for SQL Server",
   "DB_ENCRYPT": "yes",
   "DB_TRUST_SERVER_CERTIFICATE": "yes",
+  "SESSION_COOKIE_SECURE": "yes",
   "FRONTEND_DIR": "",
   "BACKUP_DIR": "C:\\Backups"
 }

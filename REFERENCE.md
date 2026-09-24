@@ -65,8 +65,8 @@ Punch devices write to SQL Server → `app.py` computes live attendance every 3s
 | `POST /api/login` (L683) | Validate login → `{success,role,label,device_id}` or 401 |
 | `GET /api/live/<id>` (L655) | Live data for one device (Dashboard/Admin) |
 | `GET /api/locations` (L700) | All devices list (switcher/admin) |
-| `GET/POST /api/users` (L715) | List/create users (admin role + bearer token required) |
-| `DELETE /api/users/<user>` (L758) | Delete user (admin role + bearer token required) |
+| `GET/POST /api/users` (L715) | List/create users (admin role + session cookie required) |
+| `DELETE /api/users/<user>` (L758) | Delete user (admin role + session cookie required) |
 | `GET /login` `GET /dashboard` `GET /admin` ... | Legacy server-rendered pages (mostly unused) |
 | `GET /logout` (L860) | Clear session |
 
@@ -122,7 +122,7 @@ Punch devices write to SQL Server → `app.py` computes live attendance every 3s
 
 | Code | Its use |
 |---|---|
-| `authFetch('/api/users')` | Load users with bearer token |
+| `authFetch('/api/users')` | Load users with session cookie |
 | `fetch('/api/locations')` | Load devices |
 | All-location live cards | Overview per device |
 | Add User form | Create manager/admin |

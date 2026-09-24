@@ -4,7 +4,7 @@ import { LogIn, X, Mail } from 'lucide-react';
 import { API_URL } from '../data/mockData';
 
 interface LoginPageProps {
-  onLogin: (username: string, role: string, label: string, deviceId: number | null, token: string) => void;
+  onLogin: (username: string, role: string, label: string, deviceId: number | null) => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
@@ -27,13 +27,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setLoading(true);
     fetch(`${API_URL}/api/login`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: username.trim(), password }),
     })
       .then(async (r) => {
         const d = await r.json();
         if (r.ok && d.success) {
-          onLogin(d.username, d.role, d.label, d.device_id ?? null, d.token ?? '');
+          onLogin(d.username, d.role, d.label, d.device_id ?? null);
         } else {
           setError('Invalid username or password');
         }

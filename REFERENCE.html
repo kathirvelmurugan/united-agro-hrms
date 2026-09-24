@@ -177,7 +177,7 @@
 <h2>Lines 715&ndash;873 &mdash; User APIs &amp; background start</h2>
 <table>
 <tr><th>Line</th><th>Code</th><th>Its use</th></tr>
-<tr><td class="ln">707</td><td class="code-cell">Bearer token + admin role</td><td>Authentication for user-management endpoints.</td></tr>
+<tr><td class="ln">707</td><td class="code-cell">Session cookie + admin role</td><td>Authentication for user-management endpoints.</td></tr>
 <tr><td class="ln">715</td><td class="code-cell">@app.route("/api/users", methods=["GET", "POST"])</td><td>List/Create users.</td></tr>
 <tr><td class="ln">722</td><td class="code-cell">&nbsp;&nbsp;if request.method == "GET":</td><td>GET &rarr; list users (excluding superadmin).</td></tr>
 <tr><td class="ln">735</td><td class="code-cell">&nbsp;&nbsp;if request.method == "POST":</td><td>POST &rarr; create user.</td></tr>
@@ -297,7 +297,7 @@
 <table>
 <tr><th>Line</th><th>Code</th><th>Its use</th></tr>
 <tr><td class="ln">55</td><td class="code-cell">const canManageAll = role === 'superadmin' || role === 'admin';</td><td>Can see all devices.</td></tr>
-<tr><td class="ln">60</td><td class="code-cell">async function fetchUsers() { authFetch('/api/users') }</td><td>Load user list with bearer token.</td></tr>
+<tr><td class="ln">60</td><td class="code-cell">async function fetchUsers() { authFetch('/api/users') }</td><td>Load user list with session cookie.</td></tr>
 <tr><td class="ln">68</td><td class="code-cell">async function fetchLocations()</td><td>Load devices.</td></tr>
 <tr><td class="ln">79</td><td class="code-cell">async function fetchLiveSummaries()</td><td>Load live data for all allowed devices.</td></tr>
 <tr><td class="ln">96</td><td class="code-cell">useEffect(..., 5000)</td><td>Refresh summaries every 5s.</td></tr>

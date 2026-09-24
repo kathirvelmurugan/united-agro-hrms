@@ -43,7 +43,7 @@ npm run build
 npm run dev
 ```
 
-The production frontend uses the same `/UA` origin as the API. All API calls except login use `src/lib/auth.ts`, which adds the bearer token.
+The production frontend uses the same `/UA` origin as the API. Login creates a secure Flask session cookie, and authenticated requests use `src/lib/auth.ts` to send that same-origin cookie automatically.
 
 ## Backend development
 
@@ -82,10 +82,10 @@ $env:FRONTEND_DIR = "$PWD\dist"
 ## Authentication and authorization
 
 - `/api/login` is public.
-- Every other `/api` route requires a valid bearer token.
+- Every other `/api` route requires a valid Flask session cookie.
 - User management, employee writes, rules writes, roster writes, backups, health details, and application-pool controls require `admin` or `superadmin`.
 - Manager access is limited to the assigned device.
-- Password changes invalidate all API tokens for that user.
+- Password changes invalidate all active sessions for that user.
 - Five failed logins from one client IP trigger a 15-minute block.
 - Passwords are stored with salted Werkzeug hashes.
 
@@ -138,11 +138,11 @@ Then verify:
 
 1. `https://win.howtostart.in/UA/` returns HTTP 200.
 2. HTTP redirects to HTTPS.
-3. Login succeeds and stores a bearer token.
+3. Login succeeds and stores a secure session cookie.
 4. Unauthenticated API requests return HTTP 401.
 5. Manager accounts see only their assigned device.
 6. Administrative APIs reject manager accounts with HTTP 403.
-7. Password changes invalidate the previous token.
+7. Password changes invalidate the previous session.
 8. Five consecutive failed logins produce a block.
 9. Punch ingestion at `/iclock/` remains available.
 10. SQL backups and roster operations succeed for an administrator.
