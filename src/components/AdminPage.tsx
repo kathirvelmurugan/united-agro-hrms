@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X } from 'lucide-react';
+import { LogOut, ArrowLeft, Shield, Trash2, Plus, RefreshCw, Users, Clock, CalendarPlus, Loader2, AlertCircle, Search, Pencil, X, Fingerprint } from 'lucide-react';
 import { API_URL } from '../data/mockData';
 import { authFetch } from '../lib/auth';
 
@@ -360,58 +360,43 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <motion.header
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="bg-white border-b border-indigo-100 px-4 sm:px-6 py-2 shrink-0"
-      >
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-sm">
-              <Shield size={16} className="text-white" />
+    <div className="h-screen w-full bg-[#f0f4f8] flex overflow-hidden">
+      <aside className="w-56 lg:w-64 bg-[#0f172a] text-white flex flex-col shrink-0 h-full">
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shrink-0">
+              <Fingerprint size={18} className="text-white" />
             </div>
-            <div>
-              <h1 className="text-sm font-semibold text-indigo-900">Admin Panel</h1>
-              <p className="text-[10px] text-indigo-500">{canManageAll ? 'Manage all locations & users' : 'Manage your location users'}</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold text-white leading-tight">Admin Panel</h1>
+              <p className="text-[10px] text-white bg-brand-600 px-1.5 py-0.5 rounded font-medium truncate">{canManageAll ? 'Manage all locations & users' : 'Manage your location users'}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onBack} className="flex items-center gap-1.5 text-[11px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors">
-              <ArrowLeft size={12} /> Dashboard
-            </button>
-            <span className="text-[11px] text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{label}</span>
-            <button onClick={onLogout} className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors">
-              <LogOut size={12} /> Logout
-            </button>
           </div>
         </div>
-      </motion.header>
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          <button onClick={() => setAdminTab('employees')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all shrink-0 ${adminTab==='employees' ? 'bg-brand-600 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}>
+            <Users size={18} className={`${adminTab==='employees' ? 'text-white' : 'text-gray-400'}`}/> Employees <span className="ml-auto text-[10px] opacity-70">{adminEmps.length}</span>
+          </button>
+          <button onClick={() => setAdminTab('users')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all shrink-0 ${adminTab==='users' ? 'bg-brand-600 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}>
+            <Shield size={18} className={`${adminTab==='users' ? 'text-white' : 'text-gray-400'}`}/> Users <span className="ml-auto text-[10px] opacity-70">{users.length}</span>
+          </button>
+          <button onClick={() => setAdminTab('shifts')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all shrink-0 ${adminTab==='shifts' ? 'bg-brand-600 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}>
+            <Clock size={18} className={`${adminTab==='shifts' ? 'text-white' : 'text-gray-400'}`}/> Shift Management <span className="ml-auto text-[10px] opacity-70">{shiftRules.length}</span>
+          </button>
+        </nav>
+        <div className="p-3 border-t border-white/10 space-y-1">
+          <button onClick={onBack} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-all shrink-0">
+            <ArrowLeft size={18} className="text-gray-400" /> Dashboard
+          </button>
+          <div className="px-3 pb-1 text-[10px] uppercase tracking-wider text-gray-500 truncate">{label}</div>
+          <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-300 hover:bg-red-500/10 hover:text-red-400 transition-all shrink-0">
+            <LogOut size={18} className="text-gray-400" /> Logout
+          </button>
+        </div>
+      </aside>
 
-      <main className="flex-1 overflow-hidden flex max-w-7xl mx-auto w-full">
-        {/* Left Nav - All options on left */}
-        <aside className="w-56 shrink-0 bg-white border-r border-indigo-100 flex flex-col">
-          <div className="p-3 border-b border-indigo-100">
-            <p className="text-[11px] font-bold text-indigo-900">Admin Options</p>
-            <p className="text-[10px] text-indigo-500"></p>
-          </div>
-          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-            <button onClick={() => setAdminTab('employees')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='employees' ? 'bg-brand-600 text-white' : 'hover:bg-indigo-50 text-indigo-700'}`}>
-              <Users size={14}/> Employees <span className="ml-auto text-[10px] opacity-70">{adminEmps.length}</span>
-            </button>
-            <button onClick={() => setAdminTab('users')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='users' ? 'bg-brand-600 text-white' : 'hover:bg-indigo-50 text-indigo-700'}`}>
-              <Shield size={14}/> Users <span className="ml-auto text-[10px] opacity-70">{users.length}</span>
-            </button>
-            <button onClick={() => setAdminTab('shifts')} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${adminTab==='shifts' ? 'bg-brand-600 text-white' : 'hover:bg-indigo-50 text-indigo-700'}`}>
-              <Clock size={14}/> Shift Management <span className="ml-auto text-[10px] opacity-70">{shiftRules.length}</span>
-            </button>
-          </nav>
-          <div className="p-3 border-t border-indigo-100">
-            <p className="text-[9px] text-indigo-400 leading-tight"></p>
-          </div>
-        </aside>
-
-        <div className="flex-1 overflow-y-auto bg-white p-4">
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        <div className="flex-1 overflow-y-auto bg-[#f0f4f8] p-4">
           {adminTab === 'employees' && (
             <div className="max-w-3xl mx-auto space-y-3">
               <div className="bg-white rounded-xl border border-indigo-100 p-3">
@@ -525,7 +510,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
