@@ -370,6 +370,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-white leading-tight">Admin Panel</h1>
               <p className="text-[10px] text-white bg-brand-600 px-1.5 py-0.5 rounded font-medium truncate">{canManageAll ? 'Manage all locations & users' : 'Manage your location users'}</p>
+              <p className="text-[10px] text-white bg-blue-600 px-1.5 py-0.5 rounded font-medium truncate mt-1">{label}</p>
             </div>
           </div>
         </div>
@@ -388,7 +389,6 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
           <button onClick={onBack} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-all shrink-0">
             <ArrowLeft size={18} className="text-gray-400" /> Dashboard
           </button>
-          <div className="px-3 pb-1 text-[10px] uppercase tracking-wider text-gray-500 truncate">{label}</div>
           <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-300 hover:bg-red-500/10 hover:text-red-400 transition-all shrink-0">
             <LogOut size={18} className="text-gray-400" /> Logout
           </button>
