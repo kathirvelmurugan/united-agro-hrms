@@ -55,6 +55,7 @@ export default function SidebarLayout({
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {MENU_ITEMS.filter(item => {
+            if (item.key === 'backup') return role === 'superadmin';
             if (role === 'superadmin' || role === 'admin') return true;
             return item.key === 'dashboard' || item.key === 'employees';
           }).map(item => {

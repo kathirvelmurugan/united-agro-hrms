@@ -322,6 +322,9 @@ ADMIN_API_ENDPOINTS = {
     "api_schedule_set",
     "api_admin_pool",
     "api_admin_pool_restart",
+}
+# Backup endpoints are superadmin-only (stricter than admin)
+BACKUP_API_ENDPOINTS = {
     "api_backup",
     "api_backup_tables",
     "api_backup_download",
@@ -376,6 +379,8 @@ def authenticate_api_request():
         return jsonify({"error": "Unauthorized"}), 401
     if request.endpoint in ADMIN_API_ENDPOINTS and auth.get("role") not in ("admin", "superadmin"):
         return jsonify({"error": "Forbidden"}), 403
+    if request.endpoint in BACKUP_API_ENDPOINTS and auth.get("role") != "superadmin":
+        return jsonify({"error": "Forbidden"}), 403
     if auth.get("role") == "manager" and request.endpoint in MANAGER_DEVICE_ENDPOINTS | {"api_live"}:
         requested = request.view_args.get("device_id") if request.view_args else None
         if requested is None:
@@ -390,6 +395,18 @@ def authenticate_api_request():
             return jsonify({"error": "Invalid device_id"}), 400
     g.api_auth = auth
     return None
+
+
+@app.route("/api/me")
+def api_me():
+    # Server-truth for current session; before_request already enforced auth and set g.api_auth
+    auth = getattr(g, "api_auth", None)
+    if not auth:
+        # Fallback check (e.g., direct call without before_request)
+        auth, _ = current_api_user()
+        if not auth:
+            return jsonify({"error": "Unauthorized"}), 401
+    return jsonify(auth)
 
 
 def login_required(f):

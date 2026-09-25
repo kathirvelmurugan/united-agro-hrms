@@ -3,6 +3,7 @@ import { X, CalendarDays, CheckCircle2, AlertTriangle, XCircle, Clock4, Timer, U
 import { API_URL } from '../data/mockData';
 import { authFetch } from '../lib/auth';
 import { shiftForEmployee, shiftSeconds } from '../lib/status';
+import { csvEscape } from '../lib/csv';
 
 export interface EmployeeRef {
   id: string;
@@ -204,13 +205,13 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
         d.late_min,
         d.extra_min ?? 0,
         d.lunch ? 'Yes' : 'No',
-      ].map(v => `"${v}"`).join(','));
+      ].map(v => csvEscape(v)).join(','));
     }
-    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(data.employee.name || 'employee').replace(/\s+/g, '_')}_${month}.csv`;
+    a.download = `${(data.employee.name || 'employee').replace(/[^\w\-]+/g, '_')}_${month}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

@@ -7,6 +7,7 @@ import type { LiveData } from '../types';
 import { getDetailedStatus } from '../data/attendanceUtils';
 import { timeAgoText } from '../lib/status';
 import { Users, ChevronDown, MapPin, RefreshCw, Download, FileSpreadsheet, Database, Search, AlertTriangle } from 'lucide-react';
+import { csvEscape } from '../lib/csv';
 
 interface DashboardProps {
   role: string;
@@ -77,7 +78,7 @@ export default function Dashboard({ role, deviceId, statusFilter = 'all', onFilt
       const all = await fetchAllData();
       const header = 'EmpID,Name,Branch,Location,Status,FirstPunch,LastPunch';
       const rows = (all.employees as any[]).map(e =>
-        [e.id, `"${e.name}"`, `"${e.branch}"`, `"${e.location}"`, e.status, e.punchTimes?.[0] || '', e.lastPunch || ''].join(',')
+        [csvEscape(e.id), csvEscape(e.name), csvEscape(e.branch), csvEscape(e.location), csvEscape(e.status), csvEscape(e.punchTimes?.[0] || ''), csvEscape(e.lastPunch || '')].join(',')
       );
       const csv = '\uFEFF' + [header, ...rows].join('\n');
       downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `attendance-backup-${new Date().toISOString().slice(0, 10)}.csv`);

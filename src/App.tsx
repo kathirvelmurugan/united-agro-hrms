@@ -91,6 +91,46 @@ export default function App() {
   const [menu, setMenu] = useState<MenuKey>(loadMenu);
   const [healthOpen, setHealthOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Critical: validate session against server truth (GET /api/me) instead of trusting localStorage alone.
+  // Prevents localStorage tampering (e.g., editing ua_session_user role to superadmin in DevTools).
+  useEffect(() => {
+    let cancelled = false;
+    // Always re-validate on mount, even if cached user exists
+    authFetch(`${API_URL}/api/me`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data: Record<string, unknown>) => {
+        if (cancelled) return;
+        // Server is truth: use its role/label/deviceId, ignore localStorage
+        const serverUser: SessionUser = {
+          username: String(data.username ?? ''),
+          role: String(data.role ?? 'manager'),
+          label: String(data.label ?? data.username ?? ''),
+          deviceId: (data.device_id as number | null) ?? (data.deviceId as number | null) ?? null,
+        };
+        if (!serverUser.username || !serverUser.role) throw new Error('invalid me');
+        setUser(serverUser);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serverUser));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // No valid server session -> clear any tampered cached user
+        setUser(null);
+        localStorage.removeItem(STORAGE_KEY);
+        setPage('login');
+        sessionStorage.setItem(PAGE_KEY, 'login');
+      })
+      .finally(() => {
+        if (!cancelled) setAuthChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin';
 
@@ -150,6 +190,17 @@ export default function App() {
     sessionStorage.setItem(PAGE_KEY, 'login');
   }
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f0f4f8]">
+        <div className="flex items-center gap-2 text-gray-500">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-brand-600 rounded-full animate-spin" />
+          <span className="text-sm">Verifying session…</span>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return <LoginPage onLogin={handleLogin} />;
   }
@@ -168,6 +219,11 @@ export default function App() {
 
   const isManager = user.role !== 'superadmin' && user.role !== 'admin';
   if (isManager && menu !== 'dashboard' && menu !== 'employees') {
+    setMenu('dashboard');
+    sessionStorage.setItem(MENU_KEY, 'dashboard');
+  }
+  // Backup is superadmin-only (stricter than isManager): prevent admin from accessing backup via tampered menu
+  if (user.role !== 'superadmin' && menu === 'backup') {
     setMenu('dashboard');
     sessionStorage.setItem(MENU_KEY, 'dashboard');
   }

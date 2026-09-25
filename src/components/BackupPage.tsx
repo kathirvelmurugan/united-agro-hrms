@@ -72,6 +72,16 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function csvSanitize(value: unknown): string {
+  const s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) return `'${s}`;
+  return s;
+}
+function csvEscape(value: unknown): string {
+  const s = csvSanitize(value).replace(/"/g, '""');
+  return `"${s}"`;
+}
+
 export default function BackupPage() {
   const [data, setData] = useState<AllLiveData | null>(null);
   const [backups, setBackups] = useState<SqlBackupItem[]>([]);
@@ -79,6 +89,15 @@ export default function BackupPage() {
   const [range, setRange] = useState<RangeKey>('today');
   const [fromDate, setFromDate] = useState(todayISO);
   const [toDate, setToDate] = useState(todayISO);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+
+  // Verify superadmin via server truth (not localStorage) for SQL backup section
+  useEffect(() => {
+    authFetch(`${API_URL}/api/me`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setIsSuperAdmin(d?.role === 'superadmin'))
+      .catch(() => setIsSuperAdmin(false));
+  }, []);
 
   function applyRange(key: RangeKey) {
     setRange(key);
@@ -109,7 +128,7 @@ export default function BackupPage() {
       const d = await r.json();
       const header = 'Date,EmpID,Name,Branch,Status,FirstPunch,LastPunch,Hours,PunchCount,Punches';
       const rows = (d.rows as PunchRow[]).map(e =>
-        [e.date, e.id, `"${e.name}"`, `"${e.branch}"`, e.status, e.first, e.last, e.hours, e.punchCount, `"${e.punches.join('; ')}"`].join(',')
+        [csvEscape(e.date), csvEscape(e.id), csvEscape(e.name), csvEscape(e.branch), csvEscape(e.status), csvEscape(e.first), csvEscape(e.last), csvEscape(e.hours), csvEscape(e.punchCount), csvEscape(e.punches.join('; '))].join(',')
       );
       const csv = '\uFEFF' + [header, ...rows].join('\n');
       downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `attendance-${from}-to-${to}.csv`);
@@ -131,15 +150,32 @@ export default function BackupPage() {
   }
 
   async function downloadSql(name: string) {
+    if (isSuperAdmin !== true) {
+      alert('Access denied: superadmin only');
+      return;
+    }
     const r = await authFetch(`${API_URL}/api/backup/download/${encodeURIComponent(name)}`);
+    if (r.status === 403) {
+      alert('Access denied: superadmin only');
+      throw new Error('Forbidden');
+    }
     if (!r.ok) throw new Error('Failed to download backup');
     downloadBlob(await r.blob(), name);
   }
 
   async function createSQLBackup() {
+    if (isSuperAdmin !== true) {
+      alert('Access denied: superadmin only');
+      return;
+    }
     setBusy('sql');
     try {
       const r = await authFetch(`${API_URL}/api/backup/create`, { method: 'POST' });
+      if (r.status === 403) {
+        alert('Access denied: superadmin only');
+        setBusy(null);
+        return;
+      }
       const d = await r.json();
       if (!d.success) {
         alert(`SQL backup failed: ${d.error || 'unknown error'}`);
@@ -253,62 +289,78 @@ export default function BackupPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center gap-2 mb-1">
-                <HardDriveDownload size={16} className="text-blue-600" />
-                <h2 className="text-sm font-semibold text-gray-800">SQL Database Backup (.bak)</h2>
+            {isSuperAdmin === null ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-center py-8 text-gray-400">
+                <Loader2 className="animate-spin h-4 w-4 mr-2" /> Checking permissions…
               </div>
-              <p className="text-[11px] text-gray-500 mb-3">
-                Runs a full backup of the SQL database <b>eTimetracklite1</b> on the server (saved to the server, verified, then downloaded). Restorable with any SQL Server.
-              </p>
-              <button
-                onClick={createSQLBackup}
-                disabled={busy !== null}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                {busy === 'sql' ? <Loader2 className="animate-spin" size={15} /> : <HardDriveDownload size={15} />}
-                Create & Download SQL Backup
-              </button>
-
-              {backups.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent backups on server (C:\Backups)</p>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-gray-50/80 text-left text-gray-500">
-                          <th className="px-3 py-2 font-semibold">File</th>
-                          <th className="px-3 py-2 font-semibold">Size</th>
-                          <th className="px-3 py-2 font-semibold">Created</th>
-                          <th className="px-3 py-2 font-semibold">Status</th>
-                          <th className="px-3 py-2 font-semibold text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {backups.slice(0, 8).map(b => (
-                          <tr key={b.name}>
-                            <td className="px-3 py-2 font-mono text-gray-700">{b.name}</td>
-                            <td className="px-3 py-2 text-gray-600">{b.size_mb} MB</td>
-                            <td className="px-3 py-2 text-gray-600">{b.mtime}</td>
-                            <td className="px-3 py-2">
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${b.damaged ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                                {b.damaged ? 'Damaged' : b.valid === false ? 'Invalid' : 'Valid'}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <button onClick={() => { void downloadSql(b.name).catch(() => alert('SQL download failed')); }}
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800">
-                                <Download size={11} /> Download
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+            ) : !isSuperAdmin ? (
+              <div className="bg-white rounded-xl border border-amber-200 p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <HardDriveDownload size={16} className="text-amber-600" />
+                  <h2 className="text-sm font-semibold text-gray-800">SQL Database Backup (.bak)</h2>
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Superadmin only</span>
                 </div>
-              )}
-            </div>
+                <p className="text-[11px] text-gray-500">This action is restricted to <b>superadmin</b> only. Your current role does not have permission to create or download database backups. Please contact an administrator.</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <HardDriveDownload size={16} className="text-blue-600" />
+                  <h2 className="text-sm font-semibold text-gray-800">SQL Database Backup (.bak)</h2>
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Superadmin</span>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-3">
+                  Runs a full backup of the SQL database <b>eTimetracklite1</b> on the server (saved to the server, verified, then downloaded). Restorable with any SQL Server.
+                </p>
+                <button
+                  onClick={createSQLBackup}
+                  disabled={busy !== null}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {busy === 'sql' ? <Loader2 className="animate-spin" size={15} /> : <HardDriveDownload size={15} />}
+                  Create & Download SQL Backup
+                </button>
+
+                {backups.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent backups on server (C:\Backups)</p>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-gray-50/80 text-left text-gray-500">
+                            <th className="px-3 py-2 font-semibold">File</th>
+                            <th className="px-3 py-2 font-semibold">Size</th>
+                            <th className="px-3 py-2 font-semibold">Created</th>
+                            <th className="px-3 py-2 font-semibold">Status</th>
+                            <th className="px-3 py-2 font-semibold text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {backups.slice(0, 8).map(b => (
+                            <tr key={b.name}>
+                              <td className="px-3 py-2 font-mono text-gray-700">{b.name}</td>
+                              <td className="px-3 py-2 text-gray-600">{b.size_mb} MB</td>
+                              <td className="px-3 py-2 text-gray-600">{b.mtime}</td>
+                              <td className="px-3 py-2">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${b.damaged ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  {b.damaged ? 'Damaged' : b.valid === false ? 'Invalid' : 'Valid'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <button onClick={() => { void downloadSql(b.name).catch(() => alert('SQL download failed')); }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800">
+                                  <Download size={11} /> Download
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <p className="text-[11px] text-gray-400">
               CSV / JSON files are generated from the live data you are viewing. The SQL .bak is a full server-side database backup.

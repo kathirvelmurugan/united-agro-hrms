@@ -5,6 +5,7 @@ import { authFetch } from '../lib/auth';
 import EmployeeMonthlyModal, { type EmployeeRef } from './EmployeeMonthlyModal';
 import { getStaffLocation, STAFF_LOCATIONS } from '../data/staffLocations';
 import { timeAgoText, fmtPunch } from '../lib/status';
+import { csvEscape } from '../lib/csv';
 
 interface BranchSummary {
   device_id: number;
@@ -136,7 +137,7 @@ export default function UnitsPage() {
           s ? s.permission_count : '', s ? (+s.permission_hours).toFixed(2) : '',
           s ? s.half_day_count : '', s ? s.overtime_count : '', s ? (+s.overtime_hours).toFixed(2) : '',
           s ? (s.off_count ?? 0) : '', s ? (s.holiday_count ?? 0) : '',
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+        ].map(v => csvEscape(v)).join(',');
         csvLines.push(row);
       }
       const blob = new Blob(['\ufeff' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
