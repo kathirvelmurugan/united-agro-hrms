@@ -64,7 +64,8 @@ const SHIFT_PRESETS = [
   { key: 'Custom', label: 'Custom', time: 'Your times', start: '', end: '', color: 'border-emerald-200 bg-emerald-50 text-emerald-700', active: 'border-emerald-500 bg-emerald-100 text-emerald-800 ring-2 ring-emerald-300' },
 ];
 
-export default function AdminPage({ label, role, deviceId, onLogout, onBack }: AdminPageProps) {
+export default function AdminPage({ label: _label, role, deviceId, onLogout, onBack }: AdminPageProps) {
+  void _label;
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -369,8 +370,7 @@ export default function AdminPage({ label, role, deviceId, onLogout, onBack }: A
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-white leading-tight">Admin Panel</h1>
-              <p className="text-[10px] text-white bg-brand-600 px-1.5 py-0.5 rounded font-medium truncate">{canManageAll ? 'Manage all locations & users' : 'Manage your location users'}</p>
-              <p className="text-[10px] text-white bg-blue-600 px-1.5 py-0.5 rounded font-medium truncate mt-1">{label}</p>
+              <p className="text-[11px] text-gray-400 truncate">{canManageAll ? 'Manage all locations & users' : 'Manage your location users'}</p>
             </div>
           </div>
         </div>
