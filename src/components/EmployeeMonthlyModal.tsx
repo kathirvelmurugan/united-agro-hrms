@@ -42,6 +42,8 @@ interface DayRow {
   last: string | null;
   hours: number;
   shift: string | null;
+  shift_source?: 'roster' | 'rotation' | 'default' | null;
+  is_roster?: boolean;
   late_min: number;
   day_type?: 'present' | 'half_day' | 'permission';
   extra_min?: number;
@@ -382,7 +384,7 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
                       {tableDays.map(d => {
                         const meta = STATUS_META[d.status];
                         return (
-                          <tr key={d.date} className={d.status === 'no_data' ? 'opacity-50' : 'hover:bg-gray-50/50'}>
+                          <tr key={d.date} className={`${d.is_roster ? 'bg-orange-50/40 border-l-2 border-l-orange-300' : ''} ${d.status === 'no_data' && !d.is_roster ? 'opacity-50' : d.is_roster ? '' : 'hover:bg-gray-50/50'}`}>
                             <td className="px-4 py-2 text-sm text-gray-700">
                               <span className="font-semibold">{d.date}</span> <span className="text-blue-700 text-xs font-semibold">({d.dow})</span>
                             </td>
@@ -448,7 +450,19 @@ export default function EmployeeMonthlyModal({ employee, onClose }: { employee: 
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-2 text-sm text-gray-600">{d.shift === 'General' ? 'G' : (d.shift ?? '--')}</td>
+                            <td className="px-4 py-2 text-sm">
+                              {d.is_roster ? (
+                                <span title={`Roster assigned via Shift Management (${d.shift}) — this overrides weekly off/holiday`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                                  {d.shift === 'General' ? 'G' : (d.shift ?? '--')} <span className="text-[9px] font-semibold bg-orange-200 rounded px-1">Roster</span>
+                                </span>
+                              ) : d.shift_source === 'rotation' ? (
+                                <span title="Rotation pattern" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                  {d.shift === 'General' ? 'G' : (d.shift ?? '--')}
+                                </span>
+                              ) : (
+                                <span className="text-gray-600">{d.shift === 'General' ? 'G' : (d.shift ?? '--')}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2 text-sm text-gray-600">{d.first ?? '--:--'}</td>
                             <td className="px-4 py-2 text-sm text-gray-600">
                               {(() => {

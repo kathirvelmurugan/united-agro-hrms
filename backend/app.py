@@ -215,7 +215,7 @@ WORKED_RULE_DEVICES = {59, 25, 58, 24, 23, 42}
 # Devices whose per-day shift label is driven by the roster schedule (shift rules)
 # rather than by punch-time auto-detection. On these devices the scheduled shift
 # (A/B/C/G from the roster) is authoritative and is NOT overridden by punches.
-ROSTER_SHIFT_DEVICES = {42}
+ROSTER_SHIFT_DEVICES = {42, 24}
 
 def refresh_device_names():
     """Sync LOCATIONS display names from the ESSL Devices table (matched by SerialNumber)."""
@@ -2221,11 +2221,13 @@ def _aggregate_month(device_id, day_punches, active_set, y, m, rules=None, badge
     while d <= last:
         rule = _rule_for_day(rules, device_id, d) if rules else None
         rule_off = rule and rule["type"] in ("weekly_off", "holiday")
+        has_roster_shift = _rule_shift(device_id, badge, d) is not None if badge else False
+        effective_rule_off = rule_off and not has_roster_shift
         if d in day_punches:
             p = _dedup_punches(day_punches[d])
             c = _classify_day(device_id, p, badge)
-            is_sunday = d.weekday() == 6 and device_id in WORKED_RULE_DEVICES
-            if (rule_off and device_id in WORKED_RULE_DEVICES) or is_sunday:
+            is_sunday = d.weekday() == 6 and device_id in WORKED_RULE_DEVICES and not has_roster_shift
+            if (effective_rule_off and device_id in WORKED_RULE_DEVICES) or is_sunday:
                 agg["present"] += 1
                 agg["total_hours"] += c["worked"] / 3600.0
                 agg["on_time"] += 1
@@ -2261,12 +2263,12 @@ def _aggregate_month(device_id, day_punches, active_set, y, m, rules=None, badge
                     agg["extra_hours"] += c["extra"] / 3600.0
                     agg["overtime_count"] += 1
                     agg["overtime_hours"] += c["extra"] / 3600.0
-        elif rule_off:
+        elif effective_rule_off:
             if rule["type"] == "weekly_off":
                 agg["off_count"] += 1
             else:
                 agg["holiday_count"] += 1
-        elif d.weekday() == 6 and device_id in WORKED_RULE_DEVICES:
+        elif d.weekday() == 6 and device_id in WORKED_RULE_DEVICES and not has_roster_shift:
             agg["off_count"] += 1
         elif d in active_set:
             if rule and rule["type"] == "permission":
@@ -4212,7 +4214,9 @@ def api_employee_monthly():
     days = []
     months = {}
     d = cutoff.date()
-    while d <= now.date():
+    import calendar as _cal
+    end_of_month = datetime(now.year, now.month, _cal.monthrange(now.year, now.month)[1]).date()
+    while d <= end_of_month:
         mkey = d.strftime("%Y-%m")
         m = months.setdefault(mkey, {"month": mkey, "present": 0, "absent": 0, "on_time": 0, "late": 0, "total_hours": 0.0,
             "late_hours": 0.0, "extra_count": 0, "extra_hours": 0.0,
@@ -4243,8 +4247,28 @@ def api_employee_monthly():
             # No shift rule found - use device default (G for most employees)
             roster_shift = "G"
         row["shift"] = roster_shift
+        # Detect if this day's shift was explicitly assigned via Shift Management (AttendanceRules type=shift)
+        # This flag drives the UI highlight "Roster" and overrides weekly_off for this employee
+        has_roster_shift = _rule_shift(device_id, badge_q, d) is not None
+        # Effective off: weekly_off/holiday only counts if NOT overridden by a roster shift assignment
+        effective_rule_off = rule_off and not has_roster_shift
+        # Also detect roster source for frontend highlighting
+        if has_roster_shift:
+            row["shift_source"] = "roster"
+            row["is_roster"] = True
+        else:
+            # Check rotation pattern as source
+            dev_patterns = ROTATION_PATTERNS.get(device_id, {})
+            badge_clean = str(badge_q).lstrip("0") if badge_q else ""
+            has_rotation = any(str(k).lstrip("0") == badge_clean for k in dev_patterns)
+            if has_rotation and roster_shift in ("W.Off", "G", "1st", "2nd", "Night", "I", "II", "III", "Holiday"):
+                row["shift_source"] = "rotation"
+            else:
+                row["shift_source"] = "default"
+            row["is_roster"] = False
         is_sunday = d.weekday() == 6
-        worked_rule_day = ((rule_off or roster_shift in ("W.Off", "Holiday")) and device_id in WORKED_RULE_DEVICES and d in day_punches) or (is_sunday and device_id in WORKED_RULE_DEVICES and d in day_punches)
+        # weekly_off that is overridden by a roster Night/G shift becomes a working roster day
+        worked_rule_day = ((effective_rule_off or roster_shift in ("W.Off", "Holiday")) and device_id in WORKED_RULE_DEVICES and d in day_punches) or (is_sunday and device_id in WORKED_RULE_DEVICES and d in day_punches and not has_roster_shift)
         if worked_rule_day:
             p = _collapse_punches(day_punches[d])
             dev_for_day = day_device.get(d, device_id)
@@ -4268,16 +4292,16 @@ def api_employee_monthly():
             row["late_min"] = 0
             row["lunch"] = c["lunch"]
             row["incomplete"] = c["incomplete"]
-        elif rule_off and roster_shift in ("W.Off", "Holiday"):
+        elif effective_rule_off and roster_shift in ("W.Off", "Holiday"):
             row["status"] = rule["type"]
             if rule["type"] == "weekly_off":
                 m["off_count"] += 1
             else:
                 m["holiday_count"] += 1
-        elif roster_shift in ("W.Off",):
+        elif roster_shift in ("W.Off",) and not has_roster_shift:
             row["status"] = "weekly_off"
             m["off_count"] += 1
-        elif is_sunday and device_id in WORKED_RULE_DEVICES:
+        elif is_sunday and device_id in WORKED_RULE_DEVICES and not has_roster_shift:
             row["status"] = "weekly_off"
             m["off_count"] += 1
         elif d in day_punches:
@@ -4678,10 +4702,21 @@ def api_rules_set():
             else:
                 weekdays_str = None
 
-            cur.execute("""
-                INSERT INTO AttendanceRules (DeviceId, RuleType, Name, StartTime, EndTime, EmpId, StartDate, EndDate, WeekDays)
-                VALUES (?, 'shift', ?, ?, ?, ?, ?, ?, ?)
-            """, device_id, name, start_t, end_t, empid_v, start_date, end_date, weekdays_str)
+            rule_id = body.get("id")
+            if rule_id is not None and str(rule_id).strip() != "":
+                try:
+                    rule_id = int(rule_id)
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid rule id"}), 400
+                cur.execute("""
+                    UPDATE AttendanceRules SET DeviceId=?, RuleType=?, Name=?, StartTime=?, EndTime=?, EmpId=?, StartDate=?, EndDate=?, WeekDays=?
+                    WHERE Id=?
+                """, device_id, 'shift', name, start_t, end_t, empid_v, start_date, end_date, weekdays_str, rule_id)
+            else:
+                cur.execute("""
+                    INSERT INTO AttendanceRules (DeviceId, RuleType, Name, StartTime, EndTime, EmpId, StartDate, EndDate, WeekDays)
+                    VALUES (?, 'shift', ?, ?, ?, ?, ?, ?, ?)
+                """, device_id, name, start_t, end_t, empid_v, start_date, end_date, weekdays_str)
             RULES_CACHE["ts"] = 0.0  # invalidate cache
             return jsonify({"success": True})
 
