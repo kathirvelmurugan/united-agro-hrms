@@ -729,10 +729,13 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) {
   const [rules, setRules] = useState<Rule[]>([]);
-  const [loadDev, setLoadDev] = useState<number | undefined>(device_id);
-  const [saving, setSaving] = useState(false);
+  const [type, setType] = useState<'weekly_off' | 'holiday' | 'permission'>('holiday');
   const [date, setDate] = useState('');
+  const [dow, setDow] = useState(6);
   const [name, setName] = useState('');
+  const [hours, setHours] = useState('2');
+  const [saving, setSaving] = useState(false);
+  const [loadDev, setLoadDev] = useState<number | undefined>(device_id);
 
   useEffect(() => {
     let cancelled = false;
@@ -749,26 +752,28 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
   async function addRule() {
     setSaving(true);
     try {
-      const body: any = { type: 'holiday', name: name.trim() || null, date: date || null };
+      const body: any = { type, name: name.trim() || null };
       if (loadDev) body.device_id = loadDev;
+      if (type === 'weekly_off') body.day_of_week = dow;
+      else body.date = date;
+      if (type === 'permission') body.hours = parseFloat(hours) || 2;
       const r = await authFetch(`${API_URL}/api/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { alert(j.error || 'Failed to save'); return; }
-      setName(''); setDate('');
+      if (!r.ok) { alert(j.error || 'Failed to save rule'); return; }
+      setName(''); setHours('2'); setDate('');
       const resp = await authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`);
       const dj = await resp.json().catch(() => ({ rules: [] }));
-      setRules((dj.rules ?? []).filter((r: any) => r.type === 'holiday'));
+      setRules(dj.rules ?? []);
       onSaved();
     } catch {
-      alert('Failed to save');
+      alert('Failed to save rule');
     } finally {
       setSaving(false);
     }
-  }
   }
 
   async function deleteRule(id: number) {
@@ -814,29 +819,75 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
               ))}
             </select>
 
+            <select
+              value={type}
+              onChange={e => setType(e.target.value as any)}
+              className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none"
+            >
+              <option value="holiday">Holiday</option>
+              <option value="weekly_off">Weekly Off</option>
+              <option value="permission">Permission (hrs granted)</option>
+            </select>
+
+            {type === 'weekly_off' ? (
+              <select
+                value={dow}
+                onChange={e => setDow(Number(e.target.value))}
+                className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none"
+              >
+                {WEEKDAYS.map((wd, i) => <option key={wd} value={i}>{wd}</option>)}
+              </select>
+            ) : (
+              <input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none"
+              />
+            )}
+
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Reason (e.g. Adi Perukku)"
+              className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none w-40"
+            />
+
+            {type === 'permission' && (
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                value={hours}
+                onChange={e => setHours(e.target.value)}
+                className="h-8 px-2 w-16 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none"
+                title="Hours granted"
+              />
+            )}
+
             <button
               onClick={addRule}
-              disabled={saving || !date}
+              disabled={saving || (type !== 'weekly_off' && !date)}
               className="h-8 px-3 rounded-lg bg-brand-600 text-white text-[11px] font-semibold hover:bg-brand-700 disabled:opacity-50"
             >
-              {saving ? 'Saving…' : 'Add Holiday'}
+              {saving ? 'Saving…' : 'Add'}
             </button>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-2.5 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800">{rules.length} rule{rules.length === 1 ? '' : 's'}</h3>
+                <h3 className="text-sm font-semibold text-gray-800">{rules.length} Holiday Rule{rules.length === 1 ? '' : 's'} (holiday only)</h3>
             </div>
             <div className="divide-y divide-gray-100">
               {rules.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-gray-400">No rules configured</p>
               ) : rules.map(r => (
                 <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                    r.type === 'weekly_off' ? 'bg-emerald-50 text-emerald-700' : r.type === 'holiday' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
-                  }`}>
-                    {r.type === 'weekly_off' ? 'Off' : r.type === 'holiday' ? 'Holiday' : 'Permission'}
-                  </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            r.type === 'holiday' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
+                          }`}>
+                            {r.type === 'holiday' ? 'Holiday' : r.type === 'weekly_off' ? 'Off' : 'Permission'}
+                          </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 truncate">
                       {r.type === 'weekly_off' ? `Every ${WEEKDAYS[r.day_of_week ?? 6]}` : r.date}
@@ -853,208 +904,6 @@ function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) 
             <div className="px-4 py-2.5 border-t border-gray-100 text-[10px] text-gray-400 bg-gray-50/60">
               Weekly-off &amp; holiday days are excluded from absence. Permission days grant hours to every employee.
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loadDev, setLoadDev] = useState<number | undefined>(device_id);
-  const [saving, setSaving] = useState(false);
-  const [date, setDate] = useState('');
-  const [name, setName] = useState('');
-  useEffect(() => {
-    let cancelled = false;
-    authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (cancelled || !d) return;
-        setRules((d.rules ?? []).filter((r: any) => r.type === 'holiday'));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [loadDev]);
-  async function addRule() {
-    setSaving(true);
-    try {
-      const body: any = { type: 'holiday', name: name.trim() || null, date: date || null };
-      if (loadDev) body.device_id = loadDev;
-      const r = await authFetch(`${API_URL}/api/rules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) { alert(j.error || 'Failed to save'); return; }
-      setName(''); setDate('');
-      const resp = await authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`);
-      const dj = await resp.json().catch(() => ({ rules: [] }));
-      setRules((dj.rules ?? []).filter((r: any) => r.type === 'holiday'));
-      onSaved();
-    } catch {
-      alert('Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function deleteRule(id: number) {
-    try {
-      await authFetch(`${API_URL}/api/rules/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      setRules(rules.filter(r => r.id !== id));
-      onSaved();
-    } catch { /* ignore */ }
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-[#f0f4f8] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="bg-white border-b border-gray-200 px-5 py-3.5 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shrink-0">
-            <CalendarDays size={16} className="text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-bold text-gray-900">Holiday & Weekly-Off Rules</h2>
-            <p className="text-[11px] text-gray-500">{loadDev ? `Applied to device ${loadDev}` : 'All branches'} &middot; holiday only shown</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
-        <div className="flex-1 overflow-auto p-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-2 bg-white border border-gray-200 rounded-xl p-3">
-            <div>
-              <label className="text-[9px] font-bold text-indigo-600 uppercase">Unit</label>
-              <select value={loadDev ?? ''} onChange={e => setLoadDev(e.target.value ? Number(e.target.value) : undefined)} className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none"><option value="">All branches</option>{branches.map(b => <option key={b.device_id} value={b.device_id}>{b.name}</option>)}</select>
-            </div>
-            <div>
-              <label className="text-[9px] font-bold text-indigo-600 uppercase">Holiday Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[9px] font-bold text-indigo-600 uppercase">Reason</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Adi Perukku" className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none w-40" />
-            </div>
-            <button onClick={addRule} disabled={saving || !date} className="h-8 px-3 rounded-lg bg-brand-600 text-white text-[11px] font-semibold hover:bg-brand-700 disabled:opacity-50">{saving ? 'Saving…' : 'Add Holiday'}</button>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800">{rules.length} Holiday Rule{rules.length === 1 ? '' : 's'} (holiday only)</h3>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {rules.map(r => (
-                <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700">Holiday</span>
-                  <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 truncate">{r.date ? r.date : '--'} {r.name ? <span className="text-gray-500 font-normal"> — {r.name}</span> : null}</p></div>
-                  <button onClick={() => deleteRule(r.id)} className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50" title="Delete holiday"><Trash2 size={14} /></button>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 py-2.5 border-t border-gray-100 text-[10px] text-gray-400 bg-gray-50/60">Only holiday rules shown. Add / edit / delete below.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RulesModal({ branches, device_id, onClose, onSaved }: RulesModalProps) {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loadDev, setLoadDev] = useState<number | undefined>(device_id);
-  const [saving, setSaving] = useState(false);
-  const [date, setDate] = useState('');
-  const [name, setName] = useState('');
-  useEffect(() => {
-    let cancelled = false;
-    authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (cancelled || !d) return;
-        setRules((d.rules ?? []).filter((r: any) => r.type === 'holiday'));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [loadDev]);
-  async function addRule() {
-    setSaving(true);
-    try {
-      const body: any = { type: 'holiday', name: name.trim() || null, date: date || null };
-      if (loadDev) body.device_id = loadDev;
-      const r = await authFetch(`${API_URL}/api/rules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) { alert(j.error || 'Failed to save'); return; }
-      setName(''); setDate('');
-      const resp = await authFetch(`${API_URL}/api/rules${loadDev ? `?device_id=${loadDev}` : ''}`);
-      const dj = await resp.json().catch(() => ({ rules: [] }));
-      setRules((dj.rules ?? []).filter((r: any) => r.type === 'holiday'));
-      onSaved();
-    } catch {
-      alert('Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function deleteRule(id: number) {
-    try {
-      await authFetch(`${API_URL}/api/rules/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      setRules(rules.filter(r => r.id !== id));
-      onSaved();
-    } catch { /* ignore */ }
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-[#f0f4f8] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="bg-white border-b border-gray-200 px-5 py-3.5 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shrink-0">
-            <CalendarDays size={16} className="text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-bold text-gray-900">Holiday Rules (Holiday Only)</h2>
-            <p className="text-[11px] text-gray-500">{loadDev ? `Applied to device ${loadDev}` : 'All branches'}</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
-        <div className="flex-1 overflow-auto p-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-2 bg-white border border-gray-200 rounded-xl p-3">
-            <div>
-              <label className="text-[9px] font-bold text-indigo-600 uppercase">Unit</label>
-              <select value={loadDev ?? ''} onChange={e => setLoadDev(e.target.value ? Number(e.target.value) : undefined)} className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none"><option value="">All branches</option>{branches.map(b => <option key={b.device_id} value={b.device_id}>{b.name}</option>)}</select>
-            </div>
-            <div>
-              <label className="text-[9px] font-bold text-indigo-600 uppercase">Holiday Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[9px] font-bold text-indigo-600 uppercase">Reason</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Adi Perukku" className="h-8 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none w-40" />
-            </div>
-            <button onClick={addRule} disabled={saving || !date} className="h-8 px-3 rounded-lg bg-brand-600 text-white text-[11px] font-semibold hover:bg-brand-700 disabled:opacity-50">{saving ? 'Saving…' : 'Add Holiday'}</button>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800">{rules.length} Holiday Rule{rules.length === 1 ? '' : 's'} (holiday only)</h3>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {rules.map(r => (
-                <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700">Holiday</span>
-                  <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 truncate">{r.date ? r.date : '--'} {r.name ? <span className="text-gray-500 font-normal"> — {r.name}</span> : null}</p></div>
-                  <button onClick={() => deleteRule(r.id)} className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50" title="Delete holiday"><Trash2 size={14} /></button>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 py-2.5 border-t border-gray-100 text-[10px] text-gray-400 bg-gray-50/60">Only holiday rules shown. Add / edit / delete below.</div>
           </div>
         </div>
       </div>
@@ -1319,5 +1168,4 @@ function CalendarModal({ branches, month, onClose }: CalendarModalProps) {
       </div>
     </div>
   );
-}
 }
