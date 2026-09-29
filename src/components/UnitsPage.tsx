@@ -105,8 +105,6 @@ export default function UnitsPage() {
     setRepLoading(true);
     setRepMsg(null);
     try {
-      const unitEmps = data.employees.filter(e => e.device_id === deviceId)
-        .map(e => ({ ...e, unitLoc: getStaffLocation(e.name, deviceId) }));
       const header = [
         'Emp ID', 'Employee Name', 'Branch', 'Location', 'Month',
         'Present', 'Absent', 'Adjusted Absent', 'On-Time', 'Late (Nos)', 'Late (hrs)',
@@ -116,8 +114,26 @@ export default function UnitsPage() {
       const csvLines = [header.join(',')];
 
       // Use monthly summary endpoint for accurate aggregate stats by device/month
-      const monthQuery = useCustom ? (fromDateStr ? fromDateStr.slice(0,7) : repFrom?.slice(0,7) || repMonth) : repMonth;
-      const r = await authFetch(`${API_URL}/api/monthly/summary?month=${encodeURIComponent(monthQuery || '2026-09')}${deviceId ? `&device_id=${deviceId}` : ''}`);
+      // For custom range (Aug->Sep), pull EACH month in range so output matches monthly stats
+      const monthA = useCustom ? ((fromDateStr || repFrom || repMonth || '2026-09').slice(0, 7)) : (repMonth || '2026-09');
+      const monthB = useCustom ? ((toDateStr || repTo || monthA).slice(0, 7)) : monthA;
+      const monthsToFetch = [monthA];
+      if (monthB && monthB !== monthA) monthsToFetch.push(monthB);
+      // If range spans 3+ months, include middle months too
+      if (monthsToFetch.length === 2) {
+        const [y1, m1] = monthA.split('-').map(Number);
+        const [y2, m2] = monthB.split('-').map(Number);
+        let cy = y1, cm = m1 + 1;
+        while (cy < y2 || (cy === y2 && cm < m2)) {
+          if (cm > 12) { cm = 1; cy += 1; }
+          const mid = `${cy}-${String(cm).padStart(2, '0')}`;
+          if (!monthsToFetch.includes(mid)) monthsToFetch.push(mid);
+          cm += 1;
+        }
+        monthsToFetch.sort();
+      }
+      for (const monthQuery of monthsToFetch) {
+      const r = await authFetch(`${API_URL}/api/monthly/summary?month=${encodeURIComponent(monthQuery)}${deviceId ? `&device_id=${deviceId}` : ''}`);
       if (r.ok) {
         const summaryData = await r.json();
         const rows = summaryData.rows || [];
@@ -127,7 +143,7 @@ export default function UnitsPage() {
             csvEscape(row.name || ''),
             csvEscape(branchName || ''),
             csvEscape(row.branch || ''),
-            csvEscape(label || monthQuery || '2026-09'),
+            csvEscape(monthQuery),
             csvEscape(row.present ?? ''),
             csvEscape(row.absent ?? ''),
             csvEscape(row.adjusted_absent ?? ''),
@@ -146,7 +162,9 @@ export default function UnitsPage() {
             csvEscape(row.holiday_count ?? ''),
           ].join(','));
         }
-      } else {
+      }
+      } // end months loop
+      if (csvLines.length === 1) {
         // Fallback: show employees with empty stats if API unavailable
         const unitEmps = data.employees.filter(e => e.device_id === deviceId)
           .map(e => ({ ...e, unitLoc: getStaffLocation(e.name, deviceId) }));
