@@ -113,6 +113,57 @@ export default function UnitsPage() {
       ];
       const csvLines = [header.join(',')];
 
+      // Custom date-range mode: aggregate per-day rows within [from, to] exactly
+      // (e.g. 2026-08-28 to 2026-09-28), so stats reflect only the selected dates
+      if (useCustom && fromMonthStr && toMonthStr) {
+        const unitEmps = data.employees.filter(e => e.device_id === deviceId)
+          .map(e => ({ ...e, unitLoc: getStaffLocation(e.name, deviceId) }));
+        const fromD = fromMonthStr.slice(0, 10);
+        const toD = toMonthStr.slice(0, 10);
+        async function fetchDays(e: { id: string; name: string; unitLoc?: string }) {
+          try {
+            const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}&days=365`);
+            if (!r.ok) return null;
+            const d = await r.json();
+            const days = (d.days || []).filter((x: any) => x.date >= fromD && x.date <= toD);
+            let present = 0, absent = 0, onTime = 0, late = 0, lateMin = 0, hours = 0;
+            let extraN = 0, extraMin = 0, permN = 0, permH = 0, half = 0, off = 0, hol = 0;
+            for (const x of days) {
+              if (x.status === 'on_time' || x.status === 'late') {
+                present += 1; hours += (+x.hours || 0);
+                if (x.status === 'late') { late += 1; lateMin += (+x.late_min || 0); }
+                else onTime += 1;
+                if ((+x.extra_min || 0) > 0) { extraN += 1; extraMin += (+x.extra_min || 0); }
+                if (x.day_type === 'permission') { permN += 1; }
+                else if (x.day_type === 'half_day') { half += 1; }
+              } else if (x.status === 'absent') { absent += 1; }
+              else if (x.status === 'weekly_off') { off += 1; }
+              else if (x.status === 'holiday') { hol += 1; }
+              else if (x.status === 'permission') { permN += 1; permH += 2; }
+            }
+            return { e, agg: { present, absent, onTime, late, lateH: lateMin / 60, hours, extraN, extraMin, permN, permH, half, off, hol } };
+          } catch { return null; }
+        }
+        const CONC = 6;
+        const out: any[] = [];
+        for (let i = 0; i < unitEmps.length; i += CONC) {
+          const batch = await Promise.all(unitEmps.slice(i, i + CONC).map(fetchDays));
+          for (const b of batch) if (b) out.push(b);
+        }
+        for (const o of out) {
+          const a = o.agg;
+          csvLines.push([
+            csvEscape(o.e.id), csvEscape(o.e.name), csvEscape(branchName || ''), csvEscape(o.e.unitLoc || ''),
+            csvEscape(label),
+            csvEscape(a.present), csvEscape(a.absent), csvEscape(Math.max(0, a.absent - 1)), csvEscape(a.onTime),
+            csvEscape(a.late), csvEscape(a.lateH.toFixed(2)),
+            csvEscape(a.extraN), csvEscape((a.extraMin / 60).toFixed(2)), csvEscape(a.hours.toFixed(2)),
+            csvEscape(a.permN), csvEscape(a.permH.toFixed(2)),
+            csvEscape(a.half), csvEscape(a.extraN), csvEscape((a.extraMin / 60).toFixed(2)),
+            csvEscape(a.off), csvEscape(a.hol),
+          ].join(','));
+        }
+      } else {
       // Use monthly summary endpoint for accurate aggregate stats by device/month
       // For custom range (Aug->Sep), pull EACH month in range so output matches monthly stats
       const monthA = useCustom ? ((fromDateStr || repFrom || repMonth || '2026-09').slice(0, 7)) : (repMonth || '2026-09');
@@ -164,6 +215,7 @@ export default function UnitsPage() {
         }
       }
       } // end months loop
+      } // end else (single-month mode)
       if (csvLines.length === 1) {
         // Fallback: show employees with empty stats if API unavailable
         const unitEmps = data.employees.filter(e => e.device_id === deviceId)
