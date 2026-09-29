@@ -98,9 +98,9 @@ export default function UnitsPage() {
   async function downloadReport(branchName: string, deviceId: number, fromDateStr?: string, toDateStr?: string) {
     if (!data) return;
     const useCustom = repCustom || (fromDateStr && toDateStr);
-    const fromMonthVal = useCustom ? (fromDateStr || repFrom || repMonth) : repMonth;
-    const toMonthVal = useCustom ? (toDateStr || repTo || fromMonthVal) : repMonth;
-    const label = useCustom ? `${fromMonthVal || '--'} to ${toMonthVal || '--'}` : (repMonth || '--');
+    const fromMonthStr = useCustom ? (fromDateStr || repFrom || '') : '';
+    const toMonthStr = useCustom ? (toDateStr || repTo || '') : '';
+    const label = useCustom ? `${fromMonthStr || '--'} to ${toMonthStr || '--'}` : (repMonth || '--');
     if (!label || label === '--') return;
     setRepLoading(true);
     setRepMsg(null);
@@ -115,39 +115,47 @@ export default function UnitsPage() {
       ];
       const csvLines = [header.join(',')];
 
-      async function fetchSummary(e: { id: string; name: string; unitLoc?: string }) {
-        try {
-          const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
-          if (!r.ok) return null;
-          const d = await r.json();
-          const monthFilter = fromMonthVal;
-          const s = d.months.find((m: { month: string }) => m.month === monthFilter) ?? null;
-          return { e, s };
-        } catch {
-          return null;
+      // Use monthly summary endpoint for accurate aggregate stats by device/month
+      const monthQuery = useCustom ? (fromDateStr ? fromDateStr.slice(0,7) : repFrom?.slice(0,7) || repMonth) : repMonth;
+      const r = await authFetch(`${API_URL}/api/monthly/summary?month=${encodeURIComponent(monthQuery || '2026-09')}${deviceId ? `&device_id=${deviceId}` : ''}`);
+      if (r.ok) {
+        const summaryData = await r.json();
+        const rows = summaryData.rows || [];
+        for (const row of rows) {
+          csvLines.push([
+            csvEscape(row.id || ''),
+            csvEscape(row.name || ''),
+            csvEscape(branchName || ''),
+            csvEscape(row.branch || ''),
+            csvEscape(label || monthQuery || '2026-09'),
+            csvEscape(row.present ?? ''),
+            csvEscape(row.absent ?? ''),
+            csvEscape(row.adjusted_absent ?? ''),
+            csvEscape(row.on_time ?? ''),
+            csvEscape(row.late ?? ''),
+            csvEscape(row.late_hours ? (+row.late_hours).toFixed(2) : ''),
+            csvEscape(row.extra_count ?? ''),
+            csvEscape(row.extra_hours ? (+row.extra_hours).toFixed(2) : ''),
+            csvEscape(row.total_hours ? (+row.total_hours).toFixed(2) : ''),
+            csvEscape(row.permission_count ?? ''),
+            csvEscape(row.permission_hours ? (+row.permission_hours).toFixed(2) : ''),
+            csvEscape(row.half_day_count ?? ''),
+            csvEscape(row.overtime_count ?? ''),
+            csvEscape(row.overtime_hours ? (+row.overtime_hours).toFixed(2) : ''),
+            csvEscape(row.off_count ?? ''),
+            csvEscape(row.holiday_count ?? ''),
+          ].join(','));
         }
-      }
-
-      const CONCURRENCY = 6;
-      const results: ({ e: { id: string; name: string; unitLoc?: string }; s: Record<string, any> | null } | null)[] = [];
-      for (let i = 0; i < unitEmps.length; i += CONCURRENCY) {
-        const batch = await Promise.all(unitEmps.slice(i, i + CONCURRENCY).map(fetchSummary));
-        results.push(...batch);
-      }
-
-      for (const res of results) {
-        if (!res) continue;
-        const s = res.s;
-        const row = [
-          res.e.id, res.e.name, branchName, res.e.unitLoc ?? '', label,
-          s ? s.present : '', s ? s.absent : '', s ? s.adjusted_absent : '', s ? s.on_time : '',
-          s ? s.late : '', s ? (+s.late_hours).toFixed(2) : '',
-          s ? s.extra_count : '', s ? (+s.extra_hours).toFixed(2) : '', s ? (+s.total_hours).toFixed(2) : '',
-          s ? s.permission_count : '', s ? (+s.permission_hours).toFixed(2) : '',
-          s ? s.half_day_count : '', s ? s.overtime_count : '', s ? (+s.overtime_hours).toFixed(2) : '',
-          s ? (s.off_count ?? 0) : '', s ? (s.holiday_count ?? 0) : '',
-        ].map(v => csvEscape(v)).join(',');
-        csvLines.push(row);
+      } else {
+        // Fallback: show employees with empty stats if API unavailable
+        const unitEmps = data.employees.filter(e => e.device_id === deviceId)
+          .map(e => ({ ...e, unitLoc: getStaffLocation(e.name, deviceId) }));
+        for (const e of unitEmps) {
+          csvLines.push([
+            csvEscape(e.id), csvEscape(e.name), csvEscape(branchName || ''), csvEscape(e.unitLoc || ''),
+            csvEscape(label || '2026-09'), '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''
+          ].join(','));
+        }
       }
       const blob = new Blob(['\ufeff' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
