@@ -35,6 +35,9 @@ export default function UnitsPage() {
   const [now, setNow] = useState(() => Date.now());
   const [repMonth, setRepMonth] = useState<string>('');
   const [repMonths, setRepMonths] = useState<string[]>([]);
+  const [repCustom, setRepCustom] = useState(false); // suppress TS6133: used in JSX via setRepCustom
+  const [repFrom, setRepFrom] = useState(''); // used by custom date range
+  const [repTo, setRepTo] = useState(''); // used by custom date range
   const [repLoading, setRepLoading] = useState(false);
   const [repMsg, setRepMsg] = useState<string | null>(null);
 
@@ -92,8 +95,10 @@ export default function UnitsPage() {
   }, [sel?.device_id]);
 
   // Download a CSV report with all employee details + monthly attendance
-  async function downloadReport(branchName: string, deviceId: number) {
-    if (!data || !repMonth) return;
+  async function downloadReport(branchName: string, deviceId: number, fromMonth?: string) {
+    if (!data) return;
+    const monthVal = repCustom ? (fromMonth || repFrom || repTo || repMonth) : repMonth;
+    if (!monthVal) return;
     setRepLoading(true);
     setRepMsg(null);
     try {
@@ -112,7 +117,8 @@ export default function UnitsPage() {
           const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
           if (!r.ok) return null;
           const d = await r.json();
-          const s = d.months.find((m: { month: string }) => m.month === repMonth) ?? null;
+          const monthFilter = fromMonth || repMonth;
+          const s = d.months.find((m: { month: string }) => m.month === monthFilter) ?? null;
           return { e, s };
         } catch {
           return null;
@@ -148,6 +154,7 @@ export default function UnitsPage() {
       a.click();
       URL.revokeObjectURL(url);
       setRepMsg('Report downloaded');
+      if (repCustom) { setRepCustom(false); setRepFrom(''); setRepTo(''); setRepMonth('2026-09'); }
     } finally {
       setRepLoading(false);
     }
@@ -261,20 +268,31 @@ export default function UnitsPage() {
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500">
                   <Download size={13} className="text-brand-500" /> Month:
                 </div>
-                <select
-                  value={repMonth}
-                  onChange={e => setRepMonth(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30"
-                  disabled={repMonths.length === 0}
-                >
-                  {repMonths.length === 0 && <option value="">—</option>}
-                  {repMonths.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
                 <button
-                  onClick={() => downloadReport(sel.name, sel.device_id)}
-                  disabled={repLoading || !repMonth}
+                  onClick={() => setRepCustom(!repCustom)}
+                  className="text-[10px] font-semibold text-brand-600 hover:text-blue-700 underline cursor-pointer"
+                  title="Custom date range"
+                >
+                  Custom Dates
+                </button>
+                {repCustom ? (
+                  <div className="flex items-center gap-2">
+                    <input type="date" value={repFrom} onChange={e => setRepFrom(e.target.value)} className="h-8 px-2 rounded-lg border text-xs bg-white" />
+                    <input type="date" value={repTo} onChange={e => setRepTo(e.target.value)} className="h-8 px-2 rounded-lg border text-xs bg-white" />
+                  </div>
+                ) : (
+                  <select
+                    value={repMonth}
+                    onChange={e => setRepMonth(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                  >
+                    {repMonths.length === 0 && <option value="">—</option>}
+                    {repMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+                <button
+                  onClick={() => downloadReport(sel.name, sel.device_id, repCustom ? (repFrom || repMonth) : repMonth)}
+                  disabled={repLoading || (!repCustom && !repMonth) || (repCustom && (!repFrom || !repTo))}
                   className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Download report with all employee details (CSV)"
                 >
