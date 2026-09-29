@@ -95,10 +95,13 @@ export default function UnitsPage() {
   }, [sel?.device_id]);
 
   // Download a CSV report with all employee details + monthly attendance
-  async function downloadReport(branchName: string, deviceId: number, fromMonth?: string) {
+  async function downloadReport(branchName: string, deviceId: number, fromDateStr?: string, toDateStr?: string) {
     if (!data) return;
-    const monthVal = repCustom ? (fromMonth || repFrom || repTo || repMonth) : repMonth;
-    if (!monthVal) return;
+    const useCustom = repCustom || (fromDateStr && toDateStr);
+    const fromMonthVal = useCustom ? (fromDateStr || repFrom || repMonth) : repMonth;
+    const toMonthVal = useCustom ? (toDateStr || repTo || fromMonthVal) : repMonth;
+    const label = useCustom ? `${fromMonthVal || '--'} to ${toMonthVal || '--'}` : (repMonth || '--');
+    if (!label || label === '--') return;
     setRepLoading(true);
     setRepMsg(null);
     try {
@@ -117,7 +120,7 @@ export default function UnitsPage() {
           const r = await authFetch(`${API_URL}/api/employee/monthly?device_id=${deviceId}&id=${encodeURIComponent(e.id)}`);
           if (!r.ok) return null;
           const d = await r.json();
-          const monthFilter = fromMonth || repMonth;
+          const monthFilter = fromMonthVal;
           const s = d.months.find((m: { month: string }) => m.month === monthFilter) ?? null;
           return { e, s };
         } catch {
@@ -136,7 +139,7 @@ export default function UnitsPage() {
         if (!res) continue;
         const s = res.s;
         const row = [
-          res.e.id, res.e.name, branchName, res.e.unitLoc ?? '', repMonth,
+          res.e.id, res.e.name, branchName, res.e.unitLoc ?? '', label,
           s ? s.present : '', s ? s.absent : '', s ? s.adjusted_absent : '', s ? s.on_time : '',
           s ? s.late : '', s ? (+s.late_hours).toFixed(2) : '',
           s ? s.extra_count : '', s ? (+s.extra_hours).toFixed(2) : '', s ? (+s.total_hours).toFixed(2) : '',
@@ -150,7 +153,7 @@ export default function UnitsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Unit_Report_${(branchName || 'unit').replace(/[^\w]+/g, '_')}_${repMonth}.csv`;
+      a.download = `Unit_Report_${(branchName || 'unit').replace(/[^\w]+/g, '_')}_${label}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       setRepMsg('Report downloaded');
