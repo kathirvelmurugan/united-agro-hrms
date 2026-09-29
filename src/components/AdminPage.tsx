@@ -103,7 +103,7 @@ export default function AdminPage({ label: _label, role, deviceId, onLogout, onB
   const [adminEmpDevice, setAdminEmpDevice] = useState<number>(0);
   const [adminEmpLoading, setAdminEmpLoading] = useState(false);
   const [editingEmpId, setEditingEmpId] = useState<number | null>(null);
-  const [editEmpForm, setEditEmpForm] = useState({ name: '', badge: '', device_id: 24 });
+  const [editEmpForm, setEditEmpForm] = useState({ name: '', badge: '', device_id: 24, empid: '' });
   const [addEmpForm, setAddEmpForm] = useState({ name: '', badge: '', device_id: 24, empid: '' });
   const [adminEmpMsg, setAdminEmpMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [deletingEmpId, setDeletingEmpId] = useState<number | null>(null);
@@ -143,14 +143,16 @@ export default function AdminPage({ label: _label, role, deviceId, onLogout, onB
     } catch { setAdminEmpMsg({ type: 'err', text: 'Failed to connect' }); }
     finally { setDeletingEmpId(null); }
   }
-  function startEditEmp(e: any) { setEditingEmpId(e.empid); setEditEmpForm({ name: e.name || '', badge: String(e.badge || ''), device_id: e.device_id || 24 }); }
+  function startEditEmp(e: any) { setEditingEmpId(e.empid); setEditEmpForm({ name: e.name || '', badge: String(e.badge || ''), device_id: e.device_id || 24, empid: String(e.empid || '') }); }
   async function handleSaveEditEmp(e: React.FormEvent) {
     e.preventDefault();
     if (editingEmpId == null) return;
     try {
       const del = await authFetch(`${API_URL}/api/admin/employee`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empid: editingEmpId }) });
       if (!del.ok) { const dj = await del.json().catch(() => ({} as any)); setAdminEmpMsg({ type: 'err', text: (dj as any).error || 'Delete failed' }); return; }
-      const add = await authFetch(`${API_URL}/api/admin/employee`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editEmpForm.name.trim(), badge: editEmpForm.badge.trim(), empid: editingEmpId, device_id: editEmpForm.device_id }) });
+      const newEmpId = parseInt((editEmpForm.empid || '').trim(), 10);
+      if (!newEmpId || newEmpId <= 0) { setAdminEmpMsg({ type: 'err', text: 'EmpID must be a positive number (e.g. 0001)' }); return; }
+      const add = await authFetch(`${API_URL}/api/admin/employee`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editEmpForm.name.trim(), badge: editEmpForm.badge.trim(), empid: newEmpId, device_id: editEmpForm.device_id }) });
       const aj = await add.json().catch(() => ({} as any));
       if (add.ok) { setAdminEmpMsg({ type: 'ok', text: `Updated "${editEmpForm.name}"` }); setEditingEmpId(null); fetchAdminEmps(); }
       else { setAdminEmpMsg({ type: 'err', text: (aj as any).error || 'Re-create failed' }); fetchAdminEmps(); }
@@ -433,6 +435,7 @@ export default function AdminPage({ label: _label, role, deviceId, onLogout, onB
                         <input value={editEmpForm.name} onChange={ev=>setEditEmpForm({...editEmpForm,name:ev.target.value})} className="w-full px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Name"/>
                         <div className="flex gap-1">
                           <input value={editEmpForm.badge} onChange={ev=>setEditEmpForm({...editEmpForm,badge:ev.target.value})} className="flex-1 px-1.5 py-1 border border-amber-200 rounded text-xs bg-white" placeholder="Badge"/>
+                          <input value={editEmpForm.empid} onChange={ev=>setEditEmpForm({...editEmpForm,empid:ev.target.value.replace(/\D/g,'').slice(0,6)})} className="w-20 px-1.5 py-1 border border-amber-200 rounded text-xs bg-white font-mono" placeholder="EmpID" title="Employee ID (shows as 0001-style)"/>
                           <select value={editEmpForm.device_id} onChange={ev=>setEditEmpForm({...editEmpForm,device_id:parseInt(ev.target.value)})} className="w-28 px-1 py-1 border border-amber-200 rounded text-xs bg-white">
                             {locations.map(l=> <option key={l.device_id} value={l.device_id}>{l.name}</option>)}
                           </select>
@@ -446,7 +449,7 @@ export default function AdminPage({ label: _label, role, deviceId, onLogout, onB
                       <div key={`${e.empid}-${e.device_id}`} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-gray-800 truncate">{e.name} <span className="font-normal text-gray-500">· {String(e.code_in_device || e.badge).padStart(3,'0')}</span></p>
-                          <p className="text-[10px] text-gray-500 truncate">ID {e.empid} · {locations.find(l=>l.device_id===e.device_id)?.name || e.device_name || '-'}</p>
+                          <p className="text-[10px] text-gray-500 truncate">ID {String(e.empid).padStart(4, '0')} · {locations.find(l=>l.device_id===e.device_id)?.name || e.device_name || '-'}</p>
                         </div>
                         <button onClick={()=>startEditEmp(e)} className="p-1 rounded hover:bg-white border border-transparent hover:border-indigo-200 text-indigo-600"><Pencil size={12}/></button>
                         <button onClick={()=>handleDeleteAdminEmp(e.empid,e.name)} disabled={deletingEmpId===e.empid} className="p-1 rounded hover:bg-red-50 text-red-600 disabled:opacity-50">{deletingEmpId===e.empid ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>}</button>
